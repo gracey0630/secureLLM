@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────
+# SecureLLM Runtime — requirements.txt
+# Python 3.10+
+# ─────────────────────────────────────────
+
+# ── LLM CLIENTS ──────────────────────────
+anthropic>=0.20.0          # Claude API client (test assistant)
+openai>=1.0.0              # OpenAI API client (alternative test assistant)
+
+# ── SECURITY SCANNERS ────────────────────
+llm-guard>=0.3.6           # Input Scanner (PromptInjection) + Output Guard (Sensitive, Secrets, BanCode)
+presidio-analyzer>=2.2.0   # Output Guard PII detection
+presidio-anonymizer>=2.2.0 # Output Guard PII redaction
+garak>=0.9.0               # Tool Sandbox adversarial probe generation
+
+# ── NLP DEPENDENCIES ─────────────────────
+# After install, run: python -m spacy download en_core_web_lg
+spacy>=3.7.0               # Presidio NER dependency
+transformers>=4.36.0       # Underlying model for LLM Guard (deberta-v3-base-injection)
+torch>=2.1.0               # Transformers backend
+
+# ── API FRAMEWORK ────────────────────────
+fastapi>=0.110.0           # Pipeline API with per-layer toggle flags
+uvicorn>=0.27.0            # FastAPI server
+
+# ── DATASETS ─────────────────────────────
+datasets>=2.17.0           # HuggingFace dataset loading (HackAPrompt, Deepset, LMSYS, ai4privacy)
+huggingface-hub>=0.21.0    # Dataset + model hub access
+
+# ── DATA PROCESSING ──────────────────────
+pandas>=2.2.0              # Dataset manipulation and parquet I/O
+numpy>=1.26.0              # Numerical operations
+pyarrow>=15.0.0            # Parquet file read/write (dataset storage format)
+faker>=23.0.0              # Synthetic canary set generation (fake API keys, SSNs, credentials)
+
+# ── METRICS + EVALUATION ─────────────────
+scikit-learn>=1.4.0        # TPR, FPR, F1, precision, confusion matrix, threshold sweep
+scipy>=1.12.0              # Confidence intervals
+
+# ── VISUALIZATION ────────────────────────
+matplotlib>=3.8.0          # Tradeoff curves, ablation tables, latency bar charts
+seaborn>=0.13.0            # Plot styling
+
+# ── DEMO INTERFACE ───────────────────────
+streamlit>=1.32.0          # Live demo UI with per-layer trace and toggle controls
+requests>=2.31.0           # Demo frontend → FastAPI backend calls
+
+# ── TESTING + LOGGING ────────────────────
+pytest>=8.0.0              # Unit tests for each pipeline component
+python-dotenv>=1.0.0       # API key management (.env file)
+loguru>=0.7.0              # Structured request logging (input, layer, decision, latency_ms)
+tqdm>=4.66.0               # Progress bars for dataset evaluation runs
+
+# ── CONTAINERIZATION ─────────────────────
+# Docker is installed at the system level, not via pip.
+# See Dockerfile in repo root for container setup.
