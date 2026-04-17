@@ -56,7 +56,7 @@ def load_hackaprompt() -> pd.DataFrame:
         "text": df[text_col].astype(str),
         "label": 1,                                        # all are attacks
         "source": "hackaprompt",
-        "difficulty": df[level_col].astype(int) if level_col else None,
+        "difficulty": df[level_col].astype(int) if level_col else pd.Series([None] * len(df), dtype=object),
     })
 
     # Stratify: keep up to 200 per level so no level dominates
