@@ -41,3 +41,13 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+
+# Derived logs (re-generate with baseline scripts; pipeline.jsonl IS committed)
+logs/b2_scores.csv
+logs/b2_hard_scores.csv
+logs/b2_sweep.csv
+logs/b2_sweep_300cap.csv
+logs/debug.jsonl
+
+# Eval outputs
+results/
