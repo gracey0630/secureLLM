@@ -18,8 +18,12 @@ import sys
 import logging
 from pathlib import Path
 
+from dotenv import load_dotenv
 import pandas as pd
 from datasets import load_dataset, Dataset
+
+# Load .env file if it exists
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger(__name__)
@@ -131,7 +135,7 @@ def load_lmsys(n_samples: int = 750) -> pd.DataFrame:
             if len(rows) >= n_samples * 5:   # oversample then filter
                 break
             # Keep English conversations
-            if example.get("language", "en") != "en":
+            if example.get("language", "English").lower() != "english":
                 continue
             # Extract first user turn
             convos = example.get("conversation", [])

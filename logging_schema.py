@@ -1,87 +1,99 @@
 """
-logging_schema.py — Shared request/event logger for the evaluation pipeline.
+logging_schema.py — Two-tier logging for the SecureLLM pipeline.
 
-Every request through any layer must call log_event().
-Schema: input, layer_triggered, decision, latency_ms, timestamp
+Two functions, two purposes:
+
+  log_request()   — PRIMARY eval logger. Writes one canonical JSON line per
+                    request to logs/pipeline.jsonl. Schema matches claude.md exactly
+                    so pd.read_json("pipeline.jsonl", lines=True) is eval-ready
+                    with no joins. Call this from the pipeline orchestrator (Week 2)
+                    once all layer results are collected.
+
+  log_event()     — DEBUG logger. Writes a lightweight per-layer line to
+                    logs/debug.jsonl. Call this from inside individual layers
+                    (input_scanner, output_guard, etc.) during isolated development
+                    before the full orchestrator exists.
+
+Timer           — Context manager for per-layer latency. Used by both callers.
 """
 
 import json
 import time
 import uuid
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-# ── configure root logger ────────────────────────────────────────────────────
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-_file_handler = logging.FileHandler(LOG_DIR / "pipeline.jsonl")
-_file_handler.setLevel(logging.DEBUG)
-
-_stream_handler = logging.StreamHandler()
-_stream_handler.setLevel(logging.INFO)
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    handlers=[_file_handler, _stream_handler],
-    format="%(message)s",   # raw JSON lines to file; stream gets same
-)
-
-logger = logging.getLogger("pipeline")
+_PIPELINE_LOG = LOG_DIR / "pipeline.jsonl"  # eval artifact — do not change path
+_DEBUG_LOG    = LOG_DIR / "debug.jsonl"
 
 
-# ── canonical event schema ───────────────────────────────────────────────────
-def log_event(
+def _append(path: Path, record: dict) -> None:
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record) + "\n")
+
+
+# ── PRIMARY: one record per request ──────────────────────────────────────────
+def log_request(
     input_text: str,
-    layer_triggered: str,          # e.g. "input_scanner", "policy_engine", "output_guard", "tool_sandbox", "b0_baseline"
-    decision: str,                 # "allow" | "block" | "redact" | "error"
+    layers_enabled: dict[str, bool],    # e.g. {"input_scanner": True, "policy_engine": False, ...}
+    layer_results: dict[str, Any],      # per-layer outcome dicts; None for disabled layers
+    final_decision: str,                # "pass" | "block" | "redact" | "error"
+    latency_ms: dict[str, float],       # {"input_scanner": 42, ..., "total": 86}
+    dataset_source: str,                # "hackaprompt" | "deepset" | "lmsys" | "ai4privacy"
+    ground_truth_label: str,            # "attack" | "legitimate"
+    *,
+    request_id: Optional[str] = None,
+) -> dict:
+    record = {
+        "request_id":         request_id or str(uuid.uuid4()),
+        "timestamp":          datetime.now(timezone.utc).isoformat(),
+        "input_text":         input_text,
+        "layers_enabled":     layers_enabled,
+        "layer_results":      layer_results,
+        "final_decision":     final_decision,
+        "latency_ms":         latency_ms,
+        "dataset_source":     dataset_source,
+        "ground_truth_label": ground_truth_label,
+    }
+    _append(_PIPELINE_LOG, record)
+    return record
+
+
+# ── DEBUG: one record per layer event ────────────────────────────────────────
+def log_event(
+    layer: str,
+    decision: str,
     latency_ms: float,
     *,
     request_id: Optional[str] = None,
-    confidence: Optional[float] = None,
-    match_reason: Optional[str] = None,
-    role: Optional[str] = None,
     extra: Optional[dict[str, Any]] = None,
-) -> dict:
-    """
-    Emit a structured JSON log line and return the event dict.
-
-    Parameters
-    ----------
-    input_text      : The raw user/system input (truncated to 500 chars in log).
-    layer_triggered : Which pipeline layer produced this event.
-    decision        : Outcome of the layer.
-    latency_ms      : Wall-clock time for this layer in milliseconds.
-    request_id      : UUID shared across all events for a single request.
-    confidence      : Scorer confidence (0–1) if applicable.
-    match_reason    : Human-readable reason for block/redact.
-    role            : RBAC role in effect, if applicable.
-    extra           : Any additional layer-specific fields.
-    """
-    event = {
+) -> None:
+    record = {
         "request_id": request_id or str(uuid.uuid4()),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "layer_triggered": layer_triggered,
-        "decision": decision,
+        "timestamp":  datetime.now(timezone.utc).isoformat(),
+        "layer":      layer,
+        "decision":   decision,
         "latency_ms": round(latency_ms, 3),
-        "input_preview": input_text[:500],
-        "confidence": confidence,
-        "match_reason": match_reason,
-        "role": role,
         **(extra or {}),
     }
-    logger.debug(json.dumps(event))
-    return event
+    _append(_DEBUG_LOG, record)
 
 
-# ── convenience timer context manager ───────────────────────────────────────
+# ── TIMER ─────────────────────────────────────────────────────────────────────
 class Timer:
-    """Usage:  with Timer() as t: ...; print(t.ms)"""
+    """Measure wall-clock ms for a block. Use one Timer per layer.
+
+        with Timer() as t:
+            result = scanner.run(text)
+        latency_ms["input_scanner"] = t.ms
+    """
     def __enter__(self):
         self._start = time.perf_counter()
         return self
 
     def __exit__(self, *_):
-        self.ms = (time.perf_counter() - self._start) * 1000
+        self.ms = round((time.perf_counter() - self._start) * 1000, 3)
