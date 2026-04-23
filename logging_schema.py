@@ -43,10 +43,13 @@ def log_request(
     layer_results: dict[str, Any],      # per-layer outcome dicts; None for disabled layers
     final_decision: str,                # "pass" | "block" | "redact" | "error"
     latency_ms: dict[str, float],       # {"input_scanner": 42, ..., "total": 86}
-    dataset_source: str,                # "hackaprompt" | "deepset" | "lmsys" | "ai4privacy"
+    dataset_source: str,                # "hackaprompt" | "deepset" | "lmsys" | "ai4privacy" | "manual"
     ground_truth_label: str,            # "attack" | "legitimate"
     *,
     request_id: Optional[str] = None,
+    run_id: str = "",                   # identifies the eval run — filter by this before dataset_source
+                                        # e.g. "b0_baseline", "policy_eval", "ablation_full", "demo"
+                                        # "" for baseline runs (backward compatible)
 ) -> dict:
     record = {
         "request_id":         request_id or str(uuid.uuid4()),
@@ -58,6 +61,7 @@ def log_request(
         "latency_ms":         latency_ms,
         "dataset_source":     dataset_source,
         "ground_truth_label": ground_truth_label,
+        "run_id":             run_id,
     }
     _append(_PIPELINE_LOG, record)
     return record

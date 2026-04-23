@@ -128,6 +128,7 @@ def run_pipeline(
     *,
     dataset_source: str = "manual",
     ground_truth_label: str = "legitimate",
+    run_id: str = "",
 ) -> dict:
     """
     Run the full SecureLLM pipeline for one request.
@@ -179,6 +180,7 @@ def run_pipeline(
                 dataset_source=dataset_source,
                 ground_truth_label=ground_truth_label,
                 request_id=request_id,
+                run_id=run_id,
             )
 
     # ── Layer 3: Claude LLM call ───────────────────────────────────────────────
@@ -308,6 +310,7 @@ class PipelineRequest(BaseModel):
     config:             dict = DEFAULT_CONFIG
     dataset_source:     str  = "manual"
     ground_truth_label: str  = "legitimate"
+    run_id:             str  = "demo"
 
 
 @app.post("/run")
@@ -318,6 +321,7 @@ def run(req: PipelineRequest) -> dict:
         req.config,
         dataset_source=req.dataset_source,
         ground_truth_label=req.ground_truth_label,
+        run_id=req.run_id,
     )
 
 
