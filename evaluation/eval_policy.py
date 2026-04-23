@@ -132,9 +132,9 @@ def _print_table(results: list, pe_latencies: list) -> None:
     if pe_latencies:
         p50 = median(pe_latencies)
         p95 = quantiles(pe_latencies, n=20)[18] if len(pe_latencies) >= 20 else max(pe_latencies)
-        print(f"\n  Policy engine decision latency")
-        print(f"    p50 : {p50:.1f}ms")
-        print(f"    p95 : {p95:.1f}ms")
+        print(f"\n  Policy engine decision latency (dict lookup — sub-millisecond)")
+        print(f"    p50 : {p50:.3f}ms")
+        print(f"    p95 : {p95:.3f}ms")
 
     print("\n" + "═" * 65)
 
