@@ -87,21 +87,21 @@
 
 ---
 
-### Week 1, First Half (Days 1–3): Foundation
+### Week 1, First Half (Days 1–3): Foundation ✓ COMPLETE
 
-**Person A**
+**Person A** ✓
 - Finalize repo structure, Docker skeleton, shared `requirements.txt`
 - Load all four datasets, clean and save as labeled parquet files
 - Implement SecUtil metric function and threshold sweep function
 - Deploy unprotected assistant (B0) and run all attack datasets through it
 - *Deliverable: B0 results logged, datasets ready, metrics functions tested*
 
-**Person B**
+**Person B** ✓
 - Implement heuristic pre-filter with pattern coverage across HackAPrompt taxonomy
 - Install and wrap LLM Guard `PromptInjection` scanner with tunable threshold
 - *Deliverable: both Input Scanner components functional as standalone modules*
 
-**Person C**
+**Person C** ✓
 - Install and test Presidio on ai4privacy dataset, record entity-level recall
 - Install and test LLM Guard `Sensitive`/`Secrets` scanners on same data
 - Generate synthetic canary set (50–100 examples)
@@ -109,72 +109,65 @@
 
 ---
 
-### Week 1, Second Half (Days 4–7): First Integration + Early Results
+### Week 1, Second Half (Days 4–7): First Integration + Early Results ✓ COMPLETE
 
-**Person A**
+**Person A** ✓
 - Integrate B0 results into harness, verify logging pipeline end-to-end
 - Run heuristic-only evaluation against HackAPrompt and Deepset, log results
 - Begin threshold sweep for heuristic-only — first tradeoff curve data
 - *Deliverable: heuristic-only baseline (B1) numbers complete*
 
-**Person B**
+**Person B** ✓
 - Run LLM Guard standalone against HackAPrompt and Deepset — this is external baseline B2
 - Run combined heuristic + LLM Guard Input Scanner, log results
 - *Deliverable: B2 (LLM Guard standalone) results complete, Input Scanner ablation started*
-- Literature to read: Yi Liu et al. 2023 "Prompt Injection Attacks and Defenses in LLM-Integrated Applications" — for attack taxonomy framing in report
 
-**Person C**
+**Person C** ✓
 - Implement canary injection logic on input side (planting the secret in system prompt)
 - Implement canary detection logic on output side (checking if secret appears in response)
 - *Deliverable: canary loop functional end-to-end, even if not yet integrated into full pipeline*
 
 ---
 
-### Week 2, First Half (Days 8–10): Policy Engine + Pipeline Integration
+### Week 2, First Half (Days 8–10): Policy Engine + Pipeline Integration ✓ COMPLETE (A+B); ⚠ PENDING (C)
 
-**Person A**
+**Person A** ✓
 - Begin integrating all components into unified FastAPI pipeline with toggle flags per layer
 - Verify each layer can be independently enabled/disabled via config
 - Run Input Scanner (full) evaluation with all results feeding into harness
 - *Deliverable: pipeline accepts toggle config, Input Scanner results complete*
 
-**Person B**
+**Person B** ✓
 - Implement Policy Engine RBAC — role definitions, decorator, allowlist per role
-- Write 20–30 manual privilege escalation test cases (e.g., guest role attempting tool calls, user role attempting admin actions)
-- Run Policy Engine in isolation, log containment rate
+- Write 29 adversarial integration tests (Groups A–D); policy corpus reused for eval
+- Run Policy Engine in isolation: 19/19 injection cases caught or model_refused, <1ms latency
 - *Deliverable: Policy Engine functional, isolated evaluation complete*
-- Reference: OWASP LLM Top 10 2025 (LLM04: Model Denial of Service, LLM05: Supply Chain) for framing in report
 
-**Person C**
-- Integrate Presidio + LLM Guard output scanners + canary check into unified Output Guard module
-- Run Output Guard in isolation against synthetic canary set and ai4privacy data
-- Compare Presidio vs. LLM Guard recall head-to-head — this is an evaluation finding
-- *Deliverable: Output Guard isolated evaluation complete, Presidio vs. LLM Guard comparison table*
+**Person C** ⚠ PENDING
+- ~~Integrate Presidio + LLM Guard output scanners + canary check into unified Output Guard module~~
+- ~~Run Output Guard in isolation against synthetic canary set and ai4privacy data~~
+- ~~Compare Presidio vs. LLM Guard recall head-to-head~~
+- *Status: standalone scripts exist (presidio_scanner.py, llmguard_output_scanner.py, canary_set.py) but output_guard.py not yet written*
 
 ---
 
-### Week 2, Second Half (Days 11–14): Tool Sandbox + Full Pipeline First Run
+### Week 2, Second Half (Days 11–14): Tool Sandbox + Full Pipeline First Run ✓ COMPLETE (B); ⚠ PENDING (A+C)
 
-**Person A**
-- Run full pipeline (all four layers) for the first time end-to-end
-- Run full ablation matrix: each layer in isolation, then all combinations
-- Begin compiling results table: B0, B1, B2, four isolated layers, full pipeline
-- *Deliverable: first complete results table, even if numbers need refinement*
+**Person A** ⚠ PENDING — blocked on output_guard.py
+- ~~Run full pipeline (all four layers) for the first time end-to-end~~
+- ~~Run full ablation matrix: each layer in isolation, then all combinations~~
+- ~~Begin compiling results table: B0, B1, B2, four isolated layers, full pipeline~~
+- *Status: can run 3-layer configs now; full ablation blocked until Person C delivers output_guard.py*
 
-**Person B**
-- Implement Tool Sandbox command validator: allowlist/blocklist for bash operations
-- Block categories: `rm -rf`, external `curl`, writes outside `/tmp`, pipe to shell
-- Install Garak: `pip install garak`, run adversarial tool-call probe suite against Sandbox
-- *Deliverable: Tool Sandbox functional, Garak evaluation complete*
-- Libraries: `garak` (`github.com/leondz/garak`), `RestrictedPython` as reference
-- Reference: Garak documentation and probe categories at `docs.garak.ai`
+**Person B** ✓
+- Tool Sandbox command validator implemented: bash blocklist + file path allowlist
+- 20-case adversarial corpus (Groups A/B/C) — attack taxonomy from Garak malwaregen/encoding probes
+- Eval results: 14/14 attacks blocked, 0/6 false positives, p95=0.280ms
+- *Note: Garak runs against LLM endpoints, not Python validators — manual corpus used instead*
 
-**Person C**
-- Attempt Terminal-Bench integration — allocate maximum 2 days
-- If integration succeeds: run 10–15 compromised-LLM scenarios through Tool Sandbox and Output Guard
-- If integration fails by end of day 2: switch to manual scenario set — 15–20 hardcoded malicious LLM outputs fed directly to Sandbox and Output Guard
-- *Deliverable: compromised-LLM evaluation complete via either path*
-- Reference: Terminal-Bench repo at `github.com/terminal-bench/terminal-bench`
+**Person C** ⚠ PENDING
+- Terminal-Bench integration: **skip** — use manual scenario set (faster, cleaner results)
+- *Immediate next action: deliver output_guard.py + orchestrator wiring (see handoff_doc_0418.md)*
 
 ---
 
