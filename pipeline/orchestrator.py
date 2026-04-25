@@ -39,6 +39,7 @@ from logging_schema import Timer, log_request
 from pipeline.canary import generate_canary, inject_canary
 from pipeline.input_scanner import heuristic_scan
 from pipeline.policy_engine import check_policy
+from pipeline.tool_sandbox import check_sandbox
 
 log = logging.getLogger(__name__)
 
@@ -148,7 +149,7 @@ def run_pipeline(
     layers_enabled = {
         "input_scanner": config.get("input_scanner", True),
         "policy_engine": config.get("policy_engine", True),
-        "tool_sandbox":  False,
+        "tool_sandbox":  config.get("tool_sandbox", False),
         "output_guard":  False,
     }
     final_decision = "pass"
@@ -252,37 +253,61 @@ def run_pipeline(
             final_decision = "block"
 
         else:
-            # All tool calls permitted — execute each stub
-            tool_outputs = []
-            for tc in tool_calls:
-                executor = _TOOL_EXECUTORS.get(tc.name)
-                if executor:
-                    try:
-                        output = executor(tc.input)
-                    except PermissionError as e:
-                        output = f"[error] {e}"
-                    tool_outputs.append((tc, output))
+            # ── Layer 3: Tool Sandbox ──────────────────────────────────────
+            # Check argument safety for each permitted tool call before execution.
+            # Block entire response if any call violates sandbox rules (same
+            # policy as policy engine: no partial execution).
+            sb_triggered = False
+            sb_result    = None
+            if layers_enabled["tool_sandbox"]:
+                with Timer() as t_sb:
+                    for tc in tool_calls:
+                        sb_trig, sb_res = check_sandbox(tc.name, tc.input, config)
+                        if sb_trig:
+                            sb_triggered = True
+                            sb_result    = sb_res
+                            break
+                latency_ms["tool_sandbox"] = t_sb.ms
+                layer_results["tool_sandbox"] = sb_result or {
+                    "triggered": False, "tool_name": tool_calls[0].name if tool_calls else None,
+                    "rule_violated": None, "blocked_arg": None, "allowed": True, "reason": "args_safe",
+                }
 
-            # Send tool results back to Claude for a natural language summary
-            tool_result_messages = messages + [{"role": "assistant", "content": response.content}]
-            tool_result_messages.append({
-                "role": "user",
-                "content": [
-                    {"type": "tool_result", "tool_use_id": tc.id, "content": output}
-                    for tc, output in tool_outputs
-                ],
-            })
+            if sb_triggered:
+                final_decision = "block"
 
-            with Timer() as t3:
-                final_response = _client.messages.create(
-                    model=MODEL,
-                    max_tokens=512,
-                    system=system_prompt,
-                    tools=CLAUDE_TOOLS,
-                    messages=tool_result_messages,
-                )
-            latency_ms["llm"] += t3.ms
-            final_decision = "pass"
+            else:
+                # All tool calls permitted and args validated — execute each stub
+                tool_outputs = []
+                for tc in tool_calls:
+                    executor = _TOOL_EXECUTORS.get(tc.name)
+                    if executor:
+                        try:
+                            output = executor(tc.input)
+                        except PermissionError as e:
+                            output = f"[error] {e}"
+                        tool_outputs.append((tc, output))
+
+                # Send tool results back to Claude for a natural language summary
+                tool_result_messages = messages + [{"role": "assistant", "content": response.content}]
+                tool_result_messages.append({
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": tc.id, "content": output}
+                        for tc, output in tool_outputs
+                    ],
+                })
+
+                with Timer() as t3:
+                    final_response = _client.messages.create(
+                        model=MODEL,
+                        max_tokens=512,
+                        system=system_prompt,
+                        tools=CLAUDE_TOOLS,
+                        messages=tool_result_messages,
+                    )
+                latency_ms["llm"] += t3.ms
+                final_decision = "pass"
 
     # ── Total latency + log ────────────────────────────────────────────────────
     latency_ms["total"] = round(sum(latency_ms.values()), 3)
