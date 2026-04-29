@@ -38,6 +38,7 @@ import tools.search as _search
 from logging_schema import Timer, log_request
 from pipeline.canary import generate_canary, inject_canary
 from pipeline.input_scanner import heuristic_scan
+from pipeline.output_guard import run_output_guard
 from pipeline.policy_engine import check_policy
 from pipeline.tool_sandbox import check_sandbox
 
@@ -150,7 +151,7 @@ def run_pipeline(
         "input_scanner": config.get("input_scanner", True),
         "policy_engine": config.get("policy_engine", True),
         "tool_sandbox":  config.get("tool_sandbox", False),
-        "output_guard":  False,
+        "output_guard":  config.get("output_guard", False),
     }
     final_decision = "pass"
 
@@ -308,6 +309,31 @@ def run_pipeline(
                     )
                 latency_ms["llm"] += t3.ms
                 final_decision = "pass"
+
+    # ── Layer 5: Output Guard ──────────────────────────────────────────────────
+    # Collect the final response text from whichever path produced it.
+    # text_blocks from the initial response covers no-tool-call paths;
+    # final_response covers the tool-execution path.
+    if layers_enabled["output_guard"] and final_decision != "block":
+        _final_blocks = []
+        try:
+            _final_blocks = [b for b in final_response.content if b.type == "text"]
+        except NameError:
+            _final_blocks = text_blocks
+        response_text = _final_blocks[0].text if _final_blocks else ""
+
+        with Timer() as t_og:
+            og_triggered, response_text, og_result = run_output_guard(
+                response_text, canary, config
+            )
+        latency_ms["output_guard"] = t_og.ms
+        layer_results["output_guard"] = og_result
+        layers_enabled["output_guard"] = True
+
+        if og_result["canary_leaked"]:
+            final_decision = "block"
+        elif og_result["redacted"]:
+            final_decision = "redact"
 
     # ── Total latency + log ────────────────────────────────────────────────────
     latency_ms["total"] = round(sum(latency_ms.values()), 3)
