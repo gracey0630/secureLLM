@@ -34,6 +34,7 @@ wheels/
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -51,3 +52,6 @@ logs/debug.jsonl
 
 # Eval outputs
 results/
+
+# Reference literature
+literature

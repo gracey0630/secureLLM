@@ -1,88 +1,3 @@
-## Immediate Action Items (Do This Week)
-
-### Person A — Evaluation Harness + Datasets
-
-**Action 1: Set up project repository and shared environment**
-- Initialize GitHub repo with branch structure, `requirements.txt`, Docker skeleton
-- Libraries: `Python 3.10+`, `fastapi`, `uvicorn`, `docker`, `pytest`
-- Establish logging schema immediately: every request logs `input`, `layer_triggered`, `decision`, `latency_ms`, `timestamp`
-
-**Action 2: Load and preprocess all datasets**
-- HackAPrompt: `from datasets import load_dataset; load_dataset("hackaprompt/hackaprompt-dataset")` — filter `correct=True`, stratify by `level`
-- Deepset: `load_dataset("deepset/prompt-injections")` — separate injection vs. legitimate splits
-- LMSYS-Chat-1M: request access at `huggingface.co/datasets/lmsys/lmsys-chat-1m`, sample 500–1000 English prompts with no injection content
-- `ai4privacy/pii-masking-200k`: load directly, no access required
-- Deliverable: four clean pandas DataFrames saved as parquet, labeled with `text`, `label` (attack/legitimate), `source`, `difficulty` where available
-
-**Action 3: Build evaluation harness skeleton**
-- Implement the SecUtil metric: `SecUtil = F1_attack × (1 − FPR_legitimate)`
-- Implement per-layer result logger: TPR, FPR, precision, F1, latency p50/p95
-- Build threshold sweep function: takes a scorer and sweeps confidence threshold 0.3→0.9, outputs tradeoff curve data
-- Libraries: `scikit-learn` (metrics), `numpy`, `pandas`, `matplotlib`/`seaborn` (plots)
-
-**Action 4: Build and evaluate unprotected baseline assistant (B0)**
-- Wrap a Claude or GPT-3.5 API call in a simple FastAPI endpoint with no security
-- Run all attack datasets through it, log results into harness
-- This is your vulnerability floor — the most dramatic number in the paper
-- Libraries: `anthropic` or `openai` SDK, `fastapi`
-
----
-
-### Person B — Input Scanner + Policy Engine
-
-**Action 1: Implement heuristic pre-filter**
-- Write regex patterns covering: instruction override phrases ("ignore previous instructions", "disregard above"), role-play triggers ("you are now", "act as"), delimiter attacks (`----`, `###SYSTEM`)
-- Reference: HackAPrompt 29-technique taxonomy (Schulhoff et al., 2023, EMNLP) — use this to ensure pattern coverage across known attack categories
-- Deliverable: a standalone function `heuristic_scan(text) → (bool, match_reason)`
-
-**Action 2: Integrate LLM Guard PromptInjection scanner**
-- `pip install llm-guard`
-- Wrap `from llm_guard.input_scanners import PromptInjection` in your pipeline interface
-- Expose confidence threshold as a tunable parameter — this drives the tradeoff curve
-- Libraries: `llm-guard`, `transformers` (underlying model: `deepset/deberta-v3-base-injection`)
-- Reference: LLM Guard docs at `protectai.github.io/llm-guard`
-
-**Action 3: Design Policy Engine RBAC structure**
-- Define three roles: `guest` (read-only, no tools), `user` (limited tools), `admin` (full tool access)
-- Implement as a Python decorator that checks role before any tool call executes
-- Define allowlist of safe tool calls per role — file reads allowed for `user`, no writes; bash execution only for `admin`
-- Reference: OPA (Open Policy Agent) documentation for production framing in report, even though you implement a lighter version
-
-**Action 4: Run Input Scanner against B0 baseline on datasets**
-- Run heuristic-only, LLM Guard standalone, and heuristic+LLM Guard combined against HackAPrompt and Deepset
-- Log all results into Person A's harness immediately
-- This gives you early ablation numbers by end of week 1/start of week 2
-
----
-
-### Person C — Output Guard + Demo Interface Planning
-
-**Action 1: Set up Presidio**
-- `pip install presidio-analyzer presidio-anonymizer`
-- Run `python -m spacy download en_core_web_lg` (Presidio dependency)
-- Test on `ai4privacy/pii-masking-200k` samples — establish baseline recall on name, email, phone, SSN entity types
-- Libraries: `presidio-analyzer`, `presidio-anonymizer`, `spacy`
-- Reference: Microsoft Presidio docs at `microsoft.github.io/presidio`
-
-**Action 2: Set up LLM Guard output scanners**
-- Integrate `from llm_guard.output_scanners import Sensitive, Secrets`
-- Run both scanners on same `ai4privacy` samples as Presidio — this head-to-head is an evaluation result
-- Libraries: `llm-guard`
-
-**Action 3: Design and generate synthetic canary set**
-- Generate 50–100 synthetic outputs containing: fake API keys (`sk-` + random 48-char string), fake AWS credentials (`AKIA` format), fake SSNs, fake connection strings
-- Half should be clearly formatted, half embedded in natural language ("here is your key: sk-...")
-- This is your ground-truth leakage detection test — 100% label certainty
-- Libraries: `faker` (synthetic PII generation), `re` for pattern validation
-
-**Action 4: Plan demo interface**
-- Sketch the UI layout: input box → pipeline trace (layer by layer, green/red) → final output with redactions visible
-- Decide on framework: Streamlit is fastest (2–3 days to build), Gradio is comparable
-- Do not build yet — plan only this week, build in week 3
-- Reference: Streamlit docs at `docs.streamlit.io`, Gradio at `gradio.app`
-
----
-
 ## Detailed Project Schedule
 
 ---
@@ -129,7 +44,7 @@
 
 ---
 
-### Week 2, First Half (Days 8–10): Policy Engine + Pipeline Integration ✓ COMPLETE (A+B); ⚠ PENDING (C)
+### Week 2, First Half (Days 8–10): Policy Engine + Pipeline Integration ✓ COMPLETE
 
 **Person A** ✓
 - Begin integrating all components into unified FastAPI pipeline with toggle flags per layer
@@ -143,21 +58,22 @@
 - Run Policy Engine in isolation: 19/19 injection cases caught or model_refused, <1ms latency
 - *Deliverable: Policy Engine functional, isolated evaluation complete*
 
-**Person C** ⚠ PENDING
-- ~~Integrate Presidio + LLM Guard output scanners + canary check into unified Output Guard module~~
-- ~~Run Output Guard in isolation against synthetic canary set and ai4privacy data~~
-- ~~Compare Presidio vs. LLM Guard recall head-to-head~~
-- *Status: standalone scripts exist (presidio_scanner.py, llmguard_output_scanner.py, canary_set.py) but output_guard.py not yet written*
+**Person C** ✓
+- Implemented `pipeline/output_guard.py` — Presidio + LLM Guard Sensitive + canary check, lazy loading, toggle passthrough
+- Wired into `pipeline/orchestrator.py` — Layer 5 block, "redact" vs "block" decision, NameError-safe final_response handling
+- Implemented `evaluation/eval_output_guard.py` — 3 sections: PII recall (ai4privacy), secrets recall (canary_set), 20 manual scenarios grounded in Greshake 2023 + Liu 2023
+- Manual scenario run: TP=9, TN=9, FP=0, FN=2 (AWS/OpenAI key formats not covered by Presidio or LLM Guard)
+- *Deliverable: Output Guard functional, wired, isolated eval complete*
 
 ---
 
-### Week 2, Second Half (Days 11–14): Tool Sandbox + Full Pipeline First Run ✓ COMPLETE (B); ⚠ PENDING (A+C)
+### Week 2, Second Half (Days 11–14): Tool Sandbox + Full Pipeline First Run ✓ COMPLETE (B+C); ⚠ PENDING (A)
 
-**Person A** ⚠ PENDING — blocked on output_guard.py
+**Person A** ⚠ PENDING — output_guard.py now delivered, ablation unblocked
 - ~~Run full pipeline (all four layers) for the first time end-to-end~~
 - ~~Run full ablation matrix: each layer in isolation, then all combinations~~
 - ~~Begin compiling results table: B0, B1, B2, four isolated layers, full pipeline~~
-- *Status: can run 3-layer configs now; full ablation blocked until Person C delivers output_guard.py*
+- *Status: all layers are wired and togglable — Person A can now run full ablation*
 
 **Person B** ✓
 - Tool Sandbox command validator implemented: bash blocklist + file path allowlist
@@ -165,22 +81,22 @@
 - Eval results: 14/14 attacks blocked, 0/6 false positives, p95=0.280ms
 - *Note: Garak runs against LLM endpoints, not Python validators — manual corpus used instead*
 
-**Person C** ⚠ PENDING
-- Terminal-Bench integration: **skip** — use manual scenario set (faster, cleaner results)
-- *Immediate next action: deliver output_guard.py + orchestrator wiring (see handoff_doc_0418.md)*
+**Person C** ✓
+- Terminal-Bench integration: **skipped** — manual scenario set used instead (cleaner, scoped)
+- output_guard.py + orchestrator wiring delivered (was the immediate blocker)
 
 ---
 
-### Week 3, First Half (Days 15–17): Evaluation Completion + Tradeoff Curves
+### Week 3, First Half (Days 15–17): Evaluation Completion + Tradeoff Curves ← CURRENT WEEK
 
-**Person A**
+**Person A** ⚠ IN PROGRESS — ablation unblocked as of Apr 29
 - Run complete threshold sweep across Input Scanner and Output Guard
 - Generate SecUtil tradeoff curves for each layer configuration
 - Finalize all quantitative results: TPR, FPR, F1, SecUtil per configuration
 - Measure and log latency p50/p95 per layer using production-volume request runs
 - *Deliverable: all quantitative results final, tradeoff curve plots ready*
 
-**Person B**
+**Person B** ⚠ IN PROGRESS
 - Write three to five case studies:
   - Canary loop catch (injection bypasses Input Scanner, caught by Output Guard)
   - Tool Sandbox block (unsafe bash command not flagged by any scanner)
@@ -188,7 +104,7 @@
   - At minimum one HackAPrompt level-5 attack trace end-to-end
 - *Deliverable: case study write-ups complete*
 
-**Person C**
+**Person C** ⚠ IN PROGRESS — starting Streamlit demo
 - Begin building Streamlit demo interface
 - Core UI: text input → per-layer trace (green/red indicator per layer) → final output with redactions highlighted
 - Wire to live pipeline via FastAPI calls
