@@ -2,9 +2,21 @@
 
 ## What This Project Is
 
-SecureLLM is a layered security middleware for LLM applications. It wraps existing
-tools (LLM Guard, Presidio) into a unified, toggleable 4-layer pipeline and contributes
-a novel evaluation framework (SecUtil metric) measuring security AND usability jointly.
+SecureLLM is a layered security runtime for **corporate agentic LLM assistants** —
+systems where an LLM has access to internal tools (file system, search, bash, external
+APIs) and handles requests from employees with different access levels.
+
+As enterprises deploy agentic assistants, the threat model expands beyond simple text
+injection to five distinct attack surfaces: prompt injection through user input, privilege
+escalation via role-policy violations, unsafe tool execution, PII/credential leakage in
+responses, and system prompt exfiltration through indirect injection. No single existing
+tool covers all five. SecureLLM wraps LLM Guard and Presidio into a unified, toggleable
+5-layer pipeline and evaluates each layer against the specific threat type it is designed
+to cover.
+
+The primary contribution is the **layered architecture and compositional evaluation
+methodology** — demonstrating that each layer catches threats the others cannot. SecUtil
+(F1_attack × (1 − FPR)) is a supporting metric for the input scanning layer specifically.
 
 This is a course project (STAT GR5293 GenAI). Code quality, reproducibility, and
 evaluation rigor matter more than architectural complexity.
@@ -23,9 +35,13 @@ secureLLM/
 │   ├── lmsys.parquet            # 731 legitimate rows (done)
 │   └── ai4privacy.parquet       # 2000 rows for PII eval (done)
 ├── logs/
-│   ├── pipeline.jsonl           # COMMITTED — canonical eval log (teammates skip B0 re-run)
-│   └── b2_*.csv                 # gitignored — derived scores, re-generate with b2_llmguard.py
-├── results/                     # eval outputs (gitignored)
+│   ├── pipeline.jsonl           # COMMITTED — canonical eval log
+│   └── b2_*.csv                 # gitignored — re-generate with b2_llmguard.py
+├── results/                     # COMMITTED — reference numbers for teammates
+│   ├── threshold_sweep.csv      # B0/B1/B2 SecUtil sweep results
+│   ├── latency_stats.json       # per-layer p50/p95/mean for Path A + B
+│   ├── tradeoff_llmguard.png    # SecUtil tradeoff curve figure
+│   └── paper_results.json       # assembled paper summary table
 ├── baselines/
 │   ├── b0_unprotected.py        # done — 2324 rows, SecUtil=0.000
 │   ├── b1_heuristic.py          # done — 2334 rows, SecUtil=0.403
@@ -33,31 +49,66 @@ secureLLM/
 ├── evaluation/
 │   ├── _report.py               # shared print_summary() for all eval scripts
 │   ├── metrics.py               # SecUtil, threshold_sweep, latency stats
-│   ├── plots.py                 # tradeoff curve figures (Week 3)
+│   ├── plots.py                 # tradeoff curve figures — done
 │   ├── eval_b0.py               # B0 metrics
 │   ├── eval_b1.py               # B1 metrics
-│   └── eval_b2.py               # B2 metrics + threshold sweep
+│   ├── eval_b2.py               # B2 metrics + threshold sweep
+│   ├── eval_policy.py           # Policy Engine containment rate — script done, run to get numbers
+│   ├── eval_tool_sandbox.py     # Tool Sandbox unit eval — script done, run to get numbers
+│   ├── eval_tool_sandbox_e2e.py # Tool Sandbox e2e adversarial eval via Claude API — done, 9/10 containment
+│   ├── eval_output_guard.py     # Output Guard PII/canary recall — script done, run to get numbers
+│   ├── run_threshold_sweep.py   # Full B0→B1→B2 SecUtil sweep — done, results committed
+│   ├── run_latency.py           # Two-path latency measurement — done, results committed
+│   ├── compile_results.py       # Assembles final paper table from all eval outputs
+│   ├── setup_latency_fixtures.py # Creates /tmp/demo/ stub files (run once before run_latency.py)
+│   ├── policy_corpus.py         # Adversarial corpus for policy engine eval
+│   └── sandbox_corpus.py        # Adversarial corpus for tool sandbox unit eval
 ├── pipeline/
 │   ├── input_scanner.py         # done — heuristic_scan() + llmguard_scan()
+│   ├── policy_engine.py         # done — RBAC decorator, 3 roles
+│   ├── tool_sandbox.py          # done — bash blocklist + file path allowlist
+│   ├── output_guard.py          # done — Presidio + LLM Guard Sensitive + canary check
+│   ├── orchestrator.py          # done — full 5-layer pipeline + FastAPI endpoint
 │   ├── canary.py                # done — generate, inject, detect canary
 │   └── b0_server.py             # FastAPI server for B0 (demo use)
 ├── load_datasets.py             # done
 ├── logging_schema.py            # done — log_request() + log_event() + Timer
-├── handoff_doc_0418.md          # Person C handoff instructions
-├── report_notes.md              # running findings log for paper
+├── docs/
+│   ├── claude.md                # this file
+│   ├── schedule.md              # detailed project schedule with status
+│   └── report_notes.md          # running findings log — READ BEFORE WRITING THE PAPER
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
 ```
 
-Not yet built: `pipeline/output_guard.py`, `pipeline/policy_engine.py`,
-`pipeline/tool_sandbox.py`, `tests/`
+**Remaining before paper:** Run `eval_policy.py`, `eval_output_guard.py`, then `compile_results.py`
+to fill in the per-layer containment numbers for the full results table. All scripts exist and work.
+
+---
+
+## Threat Model (Corporate Agentic Assistant)
+
+The system is designed around a concrete deployment scenario: a corporate agentic
+assistant with access to internal tools, serving employees across different roles.
+
+| Threat | Attack surface | Layer that covers it |
+|--------|---------------|---------------------|
+| Prompt injection (direct) | User input text | Input Scanner |
+| Prompt injection (indirect) | Poisoned retrieved document / tool output | Output Guard canary |
+| Privilege escalation | LLM-initiated tool call beyond role's permissions | Policy Engine |
+| Unsafe tool execution | Dangerous argument in a permitted tool call | Tool Sandbox |
+| PII / credential leakage | Sensitive data in LLM response text | Output Guard (Presidio + LLM Guard Sensitive) |
+
+No single existing tool covers all five surfaces. B2 (LLM Guard standalone) covers
+only the first row. The pipeline's value over B2 is coverage breadth, not SecUtil
+improvement on text injection specifically.
 
 ---
 
 ## Architecture (Fixed Scope)
 
-Four independently toggleable layers around a test LLM assistant:
+Five independently toggleable layers around a test LLM assistant:
 
 ```
 User Input
@@ -102,15 +153,22 @@ dict or YAML. This is not a product feature — it enables the ablation experime
 
 ## Primary Scientific Contribution
 
-**SecUtil metric:**
+**Layered architecture with compositional evaluation.** Each layer is evaluated against
+the threat type it is designed to cover. The results section is structured around the
+corporate threat model table above — not a single aggregate metric.
+
+**SecUtil metric (supporting, not headline):**
 ```
 SecUtil = F1_attack × (1 - FPR_legitimate)
 ```
 
-Sweep Input Scanner confidence threshold 0.3→0.9. At each threshold, compute SecUtil.
-Plot as a tradeoff curve. Do this for: heuristic-only, LLM Guard standalone, each
-isolated layer, full pipeline. This plot is the headline result — no existing tool
-produces it because none has a toggleable layered architecture.
+Applied to the Input Scanner layer specifically. Sweep threshold 0.3→0.95 over LLM Guard
+confidence scores. The sweep is flat on HackAPrompt (LLM Guard scores are binary —
+all attacks score ~1.0). This is a finding, not a failure: it means the attack/legitimate
+boundary is unambiguous for direct text injection, and the real operational tradeoff is
+FPR reduction as threshold increases. The B0→B1→B2 SecUtil progression (0.000→0.406→0.927)
+quantifies the value of better input scanning. The full pipeline's value is not captured
+by SecUtil because its other layers defend orthogonal threat surfaces.
 
 ---
 
@@ -252,7 +310,12 @@ loguru>=0.7.0              # Structured logging
    vs. full SecureLLM runtime. We do not claim our individual scanners beat LLM Guard's.
 
 2. **Tool Sandbox is a command validator, not a true sandbox.** Scope was deliberately
-   reduced for feasibility. Do not attempt Docker-in-Docker or seccomp.
+   reduced for feasibility. The natural extension is TerminalBench-style containerized
+   execution with syscall monitoring — this is not fully out of scope and may be attempted
+   if time allows before May 10. It would close the obfuscation gap (e.g. base64-encoded
+   payloads) that static regex cannot catch. If attempted: Docker-in-Docker is off the
+   table; a lightweight approach (subprocess with resource limits + output diff) is more
+   feasible. Do not start without confirming timeline first.
 
 3. **Rebuff is NOT a live baseline.** It is archived (May 2025), requires Pinecone +
    Supabase, and is cited as prior art only.

@@ -50,8 +50,8 @@ logs/b2_sweep.csv
 logs/b2_sweep_300cap.csv
 logs/debug.jsonl
 
-# Eval outputs
-results/
+# Eval outputs — committed so teammates have reference numbers without re-running
+# results/
 
 # Reference literature
 literature

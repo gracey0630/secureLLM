@@ -87,14 +87,17 @@
 
 ---
 
-### Week 3, First Half (Days 15–17): Evaluation Completion + Tradeoff Curves ← CURRENT WEEK
+### Week 3, First Half (Days 15–17): Evaluation Completion + Tradeoff Curves ✓ COMPLETE (A); ⚠ IN PROGRESS (B, C)
 
-**Person A** ⚠ IN PROGRESS — ablation unblocked as of Apr 29
-- Run complete threshold sweep across Input Scanner and Output Guard
-- Generate SecUtil tradeoff curves for each layer configuration
-- Finalize all quantitative results: TPR, FPR, F1, SecUtil per configuration
-- Measure and log latency p50/p95 per layer using production-volume request runs
-- *Deliverable: all quantitative results final, tradeoff curve plots ready*
+**Person A** ✓ COMPLETE
+- ✓ Full threshold sweep run — B0=0.000, B1=0.406, B2(t=0.50)=0.9269, peak(t=0.95)=0.9450
+- ✓ SecUtil tradeoff curve generated — results/tradeoff_llmguard.png (flat sweep finding documented)
+- ✓ Latency measured — Path A (tool-use, all 5 layers): LLM p50=3,622ms, Output Guard p50=324ms, security overhead=8.2%; Path B (text): LLM p50=4,912ms
+- ✓ eval_tool_sandbox_e2e.py written and run — 9/10 containment; 1 partial-sanitization escape (B5 base64, documented in report_notes.md)
+- ✓ compile_results.py written — assembles paper summary table from all eval outputs
+- ✓ setup_latency_fixtures.py written — creates /tmp/demo/ stub files for run_latency.py
+- ⚠ Remaining: run eval_policy.py + eval_output_guard.py to fill in per-layer containment numbers for full paper table
+- *Results saved: results/threshold_sweep.csv, results/latency_stats.json, results/tradeoff_llmguard.png, results/paper_results.json*
 
 **Person B** ⚠ IN PROGRESS
 - Write three to five case studies:
