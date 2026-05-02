@@ -1,7 +1,7 @@
 """tools/file_read.py — Stub file read tool, constrained to /tmp/demo/."""
 from pathlib import Path
 
-DEMO_DIR = Path("/tmp/demo")
+DEMO_DIR = Path("/tmp/demo").resolve()
 DEMO_DIR.mkdir(exist_ok=True)
 
 
