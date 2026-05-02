@@ -77,6 +77,7 @@ secureLLM/
 │   ├── claude.md                # this file
 │   ├── schedule.md              # detailed project schedule with status
 │   └── report_notes.md          # running findings log — READ BEFORE WRITING THE PAPER
+├── app.py                       # Streamlit demo UI — run with: streamlit run app.py
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
@@ -84,6 +85,11 @@ secureLLM/
 
 **Remaining before paper:** Run `eval_policy.py`, `eval_output_guard.py`, then `compile_results.py`
 to fill in the per-layer containment numbers for the full results table. All scripts exist and work.
+
+**Demo status (May 2):** `app.py` committed to `streamlit-demo` branch. Runs locally against
+`run_pipeline()` directly (no FastAPI server needed). All 5 attack scenarios functional.
+Canary scenario is nondeterministic — see `docs/report_notes.md` for paper framing.
+Deferred improvements tracked in `docs/modularization_plan.md`.
 
 ---
 
