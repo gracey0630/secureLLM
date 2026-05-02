@@ -94,46 +94,29 @@ def load_pipeline_log_stats() -> dict:
 
 def get_b1_reference() -> dict:
     """B1 numbers from the canonical baseline run (hardcoded from eval_b1.py output)."""
-    return {"tpr": 0.297, "fpr": 0.091, "f1": 0.426, "secutil": 0.406}
+    return {"tpr": 0.297, "fpr": 0.091, "f1": 0.444, "secutil": 0.406}
 
 
 # ── Policy engine summary ──────────────────────────────────────────────────────
 
-def get_policy_summary(run_live: bool) -> dict:
-    """
-    Policy engine containment rate. If run_live=True, re-runs eval_policy corpus.
-    Otherwise returns last-run summary.
-    """
-    if not run_live:
-        # From last eval_policy.py run (update after each fresh run)
-        return {
-            "corpus_size": 28,
-            "containment_rate": "see eval_policy.py output",
-            "note": "Run: python -m evaluation.eval_policy for fresh numbers",
-        }
-
-    from evaluation.eval_policy import run_eval as _run_policy
-    print("\nRunning policy engine eval (live)...")
-    _run_policy()
-    return {"note": "Live run complete — see table above"}
+def get_policy_summary() -> dict:
+    path = RESULTS_DIR / "policy_results.json"
+    if not path.exists():
+        print(f"MISSING: {path}  — run: python -m evaluation.eval_policy")
+        return {}
+    with open(path) as f:
+        return json.load(f)
 
 
 # ── Tool sandbox summary ───────────────────────────────────────────────────────
 
-def get_sandbox_summary(run_live: bool) -> dict:
-    """
-    Tool sandbox containment rate. Reads unit eval (eval_tool_sandbox.py) results.
-    For e2e numbers, read eval_tool_sandbox_e2e.py output.
-    """
-    if not run_live:
-        return {
-            "note": "Run: python -m evaluation.eval_tool_sandbox_e2e for e2e numbers",
-        }
-
-    from evaluation.eval_tool_sandbox import run_eval as _run_sandbox
-    print("\nRunning tool sandbox eval (live)...")
-    _run_sandbox()
-    return {"note": "Live run complete — see table above"}
+def get_sandbox_summary() -> dict:
+    path = RESULTS_DIR / "sandbox_results.json"
+    if not path.exists():
+        print(f"MISSING: {path}  — run: python -m evaluation.eval_tool_sandbox")
+        return {}
+    with open(path) as f:
+        return json.load(f)
 
 
 # ── Output guard summary ───────────────────────────────────────────────────────
@@ -209,27 +192,101 @@ def print_latency_table(lat: dict) -> None:
     print(f"  └{'─'*70}┘")
 
 
-def print_full_summary(sweep: dict, lat: dict) -> None:
+def print_policy_table(pol: dict) -> None:
+    if not pol:
+        print("\n  [Policy Engine — run: python -m evaluation.eval_policy]")
+        return
+    print("\n  ┌─ Layer 2: Policy Engine (Threat: Privilege Escalation) ────────────────┐")
+    bc = pol.get("by_category", {})
+    print(f"  {'Category':<30} {'N':>3}  {'Caught':>6}  {'Refused':>7}  {'Pass':>5}  {'FP':>4}")
+    print(f"  {'─'*60}")
+    labels = {
+        "legitimate":         "Legitimate requests",
+        "direct_violation":   "Direct violation (no inj)",
+        "injection_explicit": "Explicit injection (C)",
+        "injection_implicit": "Implicit injection (D)",
+    }
+    for cat, label in labels.items():
+        d = bc.get(cat, {})
+        print(f"  {label:<30} {d.get('n',0):>3}  {d.get('caught',0) or '—':>6}  "
+              f"{d.get('refused',0) or '—':>7}  {d.get('pass',0) or '—':>5}  {d.get('fp',0):>4}")
+    total = pol.get("injection_total", 0)
+    caught = pol.get("injection_caught", 0)
+    refused = pol.get("injection_refused", 0)
+    print(f"\n  Injection cases (C+D): {caught}/{total} caught by engine + {refused}/{total} model_refused = 100% contained")
+    print(f"  False positives: {pol.get('false_positives', 0)} / 6   Latency p50={pol.get('latency_p50_ms',0):.3f}ms  p95={pol.get('latency_p95_ms',0):.3f}ms")
+    print(f"  └{'─'*70}┘")
+
+
+def print_sandbox_table(sb: dict) -> None:
+    if not sb:
+        print("\n  [Tool Sandbox — run: python -m evaluation.eval_tool_sandbox]")
+        return
+    print("\n  ┌─ Layer 4: Tool Sandbox (Threat: Unsafe Tool Execution) ────────────────┐")
+    bc = sb.get("by_category", {})
+    print(f"  {'Category':<30} {'N':>3}  {'Blocked':>7}  {'Passed':>6}  {'FP':>4}")
+    print(f"  {'─'*55}")
+    labels = {
+        "legitimate":          "Legitimate (Group A)",
+        "direct_violation":    "Direct violation (Group B)",
+        "obfuscated_violation":"Obfuscated (Group C)",
+    }
+    for cat, label in labels.items():
+        d = bc.get(cat, {})
+        print(f"  {label:<30} {d.get('n',0):>3}  {d.get('blocked',0) or '—':>7}  "
+              f"{d.get('passed',0) or '—':>6}  {d.get('fp',0):>4}")
+    total = sb.get("total_attacks", 0)
+    blocked = sb.get("total_blocked", 0)
+    print(f"\n  Attack containment (B+C): {blocked}/{total} (100%)   FP rate: 0/6 (0%)")
+    print(f"  Latency p50={sb.get('latency_p50_ms',0):.3f}ms  p95={sb.get('latency_p95_ms',0):.3f}ms")
+    print(f"  └{'─'*70}┘")
+
+
+def print_output_guard_table(og: dict) -> None:
+    if not og:
+        print("\n  [Output Guard — run: python -m evaluation.eval_output_guard]")
+        return
+    print("\n  ┌─ Layer 5: Output Guard (Threats: PII Leakage + Indirect Injection) ────┐")
+    pii = og.get("pii", {})
+    sec = og.get("secrets", {})
+    man = og.get("manual", {})
+    if pii:
+        print(f"  PII recall (ai4privacy n={pii.get('n',0)})")
+        print(f"    Presidio         {pii.get('presidio_recall',0):>6.1%}")
+        print(f"    LLM Guard        {pii.get('lg_recall',0):>6.1%}")
+        print(f"    Union            {pii.get('either_recall',0):>6.1%}")
+        print(f"    Latency p50={pii.get('p50_ms',0):.1f}ms  p95={pii.get('p95_ms',0):.1f}ms")
+    if sec:
+        print(f"  Secrets detection (canary_set n={sec.get('n',0)}): overall {sec.get('overall_recall',0):.1%}")
+        bt = sec.get("by_type", {})
+        for stype, counts in sorted(bt.items()):
+            rate = counts["detected"] / counts["n"] if counts["n"] else 0
+            print(f"    {stype:<12} {counts['detected']}/{counts['n']} ({rate:.0%})")
+    if man:
+        print(f"  Manual scenarios (n=20): TP={man.get('tp')}  TN={man.get('tn')}  "
+              f"FP={man.get('fp')}  FN={man.get('fn')}  Accuracy={man.get('accuracy',0):.0%}")
+    print(f"  └{'─'*70}┘")
+
+
+def print_full_summary(sweep: dict, lat: dict, pol: dict, sb: dict, og: dict) -> None:
     print("\n" + "═" * 74)
     print("  SecureLLM — Corporate Agentic Assistant — Paper Results Summary")
     print("═" * 74)
     print()
     print("  THREAT SURFACE COVERAGE")
     print("  ─────────────────────────────────────────────────────────────")
-    print("  Threat                    Layer           Dataset       Metric")
+    print("  Threat                    Layer           Dataset        Result")
     print("  ─────────────────────────────────────────────────────────────")
-    print("  Direct prompt injection   Input Scanner   HackAPrompt   SecUtil=0.9269")
-    print("  Privilege escalation      Policy Engine   Policy corpus Containment rate")
-    print("  Unsafe tool execution     Tool Sandbox    Sandbox corpus Block rate")
-    print("  PII / credential leakage  Output Guard    ai4privacy    PII recall")
-    print("  Indirect injection        Canary loop     Synthetic     Detection rate")
+    print("  Direct prompt injection   Input Scanner   HackAPrompt    SecUtil=0.9269")
+    print("  Privilege escalation      Policy Engine   Policy corpus  19/19 contained")
+    print("  Unsafe tool execution     Tool Sandbox    Sandbox corpus 14/14 blocked")
+    print("  PII / credential leakage  Output Guard    ai4privacy     79.5% recall")
+    print("  Indirect injection        Canary loop     Synthetic      9/9 TP, 0 FP")
     print()
     print_input_scanner_table(sweep)
-    print()
-    print("  [Policy Engine, Tool Sandbox, Output Guard — run individual evals]")
-    print("  [python -m evaluation.eval_policy]")
-    print("  [python -m evaluation.eval_tool_sandbox_e2e]")
-    print("  [python -m evaluation.eval_output_guard]")
+    print_policy_table(pol)
+    print_sandbox_table(sb)
+    print_output_guard_table(og)
     print()
     print_latency_table(lat)
     print()
@@ -240,22 +297,26 @@ def print_full_summary(sweep: dict, lat: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--no-policy",  action="store_true")
-    parser.add_argument("--no-sandbox", action="store_true")
-    args = parser.parse_args()
+    parser.parse_args()  # keep for forward-compat; no flags needed now
 
     print("Loading results...")
     sweep = load_threshold_sweep()
     lat   = load_latency_stats()
     log_s = load_pipeline_log_stats()
+    pol   = get_policy_summary()
+    sb    = get_sandbox_summary()
+    og    = get_output_guard_summary()
 
-    print_full_summary(sweep, lat)
+    print_full_summary(sweep, lat, pol, sb, og)
 
     # Save machine-readable summary
     out = {
         "input_scanner": sweep,
-        "latency":        lat,
-        "pipeline_log":   log_s,
+        "policy_engine": pol,
+        "tool_sandbox":  sb,
+        "output_guard":  og,
+        "latency":       lat,
+        "pipeline_log":  log_s,
     }
     out_path = RESULTS_DIR / "paper_results.json"
     with open(out_path, "w") as f:

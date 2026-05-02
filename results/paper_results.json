@@ -27,6 +27,128 @@
     "sweep_flat": true,
     "finding": "TPR=1.0 at all thresholds 0.30\u21920.95 (binary score distribution)"
   },
+  "policy_engine": {
+    "injection_total": 19,
+    "injection_caught": 15,
+    "injection_refused": 4,
+    "containment_rate": 1.0,
+    "catch_rate": 0.7894736842105263,
+    "false_positives": 0,
+    "by_category": {
+      "legitimate": {
+        "n": 6,
+        "caught": 0,
+        "refused": 0,
+        "pass": 6,
+        "fp": 0
+      },
+      "direct_violation": {
+        "n": 4,
+        "caught": 4,
+        "refused": 0,
+        "pass": 0,
+        "fp": 0
+      },
+      "injection_explicit": {
+        "n": 4,
+        "caught": 1,
+        "refused": 3,
+        "pass": 0,
+        "fp": 0
+      },
+      "injection_implicit": {
+        "n": 15,
+        "caught": 14,
+        "refused": 1,
+        "pass": 0,
+        "fp": 0
+      }
+    },
+    "latency_p50_ms": 0.013,
+    "latency_p95_ms": 0.056
+  },
+  "tool_sandbox": {
+    "total_attacks": 14,
+    "total_blocked": 14,
+    "containment_rate": 1.0,
+    "false_positives": 0,
+    "fp_rate": 0.0,
+    "by_category": {
+      "legitimate": {
+        "n": 6,
+        "blocked": 0,
+        "passed": 6,
+        "missed": 0,
+        "fp": 0
+      },
+      "direct_violation": {
+        "n": 8,
+        "blocked": 8,
+        "passed": 0,
+        "missed": 0,
+        "fp": 0
+      },
+      "obfuscated_violation": {
+        "n": 6,
+        "blocked": 6,
+        "passed": 0,
+        "missed": 0,
+        "fp": 0
+      }
+    },
+    "latency_p50_ms": 0.003958004526793957,
+    "latency_p95_ms": 0.11089370818808675
+  },
+  "output_guard": {
+    "pii": {
+      "n": 200,
+      "presidio_recall": 0.755,
+      "lg_recall": 0.21,
+      "either_recall": 0.795,
+      "p50_ms": 118.46783349756151,
+      "p95_ms": 665.156795817893
+    },
+    "secrets": {
+      "n": 104,
+      "total_detected": 55,
+      "overall_recall": 0.5288461538461539,
+      "by_type": {
+        "api_key": {
+          "n": 26,
+          "detected": 2
+        },
+        "aws_creds": {
+          "n": 26,
+          "detected": 1
+        },
+        "ssn": {
+          "n": 26,
+          "detected": 26
+        },
+        "conn_str": {
+          "n": 26,
+          "detected": 26
+        }
+      },
+      "by_style": {
+        "plain": {
+          "n": 52,
+          "detected": 28
+        },
+        "embedded": {
+          "n": 52,
+          "detected": 27
+        }
+      }
+    },
+    "manual": {
+      "tp": 9,
+      "tn": 9,
+      "fp": 0,
+      "fn": 2,
+      "accuracy": 0.9
+    }
+  },
   "latency": {
     "path_a_tool_use": {
       "input_scanner": {
@@ -108,8 +230,8 @@
     "path_b_n_rows": 10
   },
   "pipeline_log": {
-    "total_logged": 8432,
-    "blocked": 2827,
-    "pass_rate": 0.6647296015180265
+    "total_logged": 8518,
+    "blocked": 2876,
+    "pass_rate": 0.6623620568208499
   }
 }

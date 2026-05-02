@@ -112,6 +112,42 @@ def _print_table(results: list, latencies: list) -> None:
 
     print("\n" + "═" * 65)
 
+    # Save results for compile_results.py
+    import json
+    attack_rows = [r for r in results if r["category"] != "legitimate"]
+    legit_rows  = [r for r in results if r["category"] == "legitimate"]
+    total_attacks = len(attack_rows)
+    total_blocked = sum(1 for r in attack_rows if r["outcome"] == "blocked")
+    fp_count      = sum(1 for r in legit_rows if r["outcome"] == "false_block")
+    p50 = median(latencies)
+    p95 = quantiles(latencies, n=20)[18] if len(latencies) >= 20 else max(latencies)
+
+    by_category = {}
+    for cat in ["legitimate", "direct_violation", "obfuscated_violation"]:
+        rows = [r for r in results if r["category"] == cat]
+        by_category[cat] = {
+            "n":       len(rows),
+            "blocked": sum(1 for r in rows if r["outcome"] == "blocked"),
+            "passed":  sum(1 for r in rows if r["outcome"] == "passed"),
+            "missed":  sum(1 for r in rows if r["outcome"] == "missed"),
+            "fp":      sum(1 for r in rows if r["outcome"] == "false_block"),
+        }
+
+    out = {
+        "total_attacks":      total_attacks,
+        "total_blocked":      total_blocked,
+        "containment_rate":   total_blocked / total_attacks if total_attacks else 0,
+        "false_positives":    fp_count,
+        "fp_rate":            fp_count / len(legit_rows) if legit_rows else 0,
+        "by_category":        by_category,
+        "latency_p50_ms":     p50,
+        "latency_p95_ms":     p95,
+    }
+    out_path = Path(__file__).parent.parent / "results" / "sandbox_results.json"
+    with open(out_path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"Results saved → {out_path}")
+
 
 if __name__ == "__main__":
     run_eval()

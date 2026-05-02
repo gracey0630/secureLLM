@@ -138,6 +138,46 @@ def _print_table(results: list, pe_latencies: list) -> None:
 
     print("\n" + "═" * 65)
 
+    # Save results for compile_results.py
+    import json
+    from pathlib import Path as _Path
+    injection_rows = [r for r in results if r["category"] in ("injection_explicit", "injection_implicit")]
+    legit_rows     = [r for r in results if r["category"] == "legitimate"]
+    injection_total   = len(injection_rows)
+    injection_caught  = sum(1 for r in injection_rows if r["outcome"] == "caught")
+    injection_refused = sum(1 for r in injection_rows if r["outcome"] == "model_refused")
+    fp_count          = sum(1 for r in legit_rows if r["outcome"] == "false_block")
+
+    by_category = {}
+    for cat in ["legitimate", "direct_violation", "injection_explicit", "injection_implicit"]:
+        rows = [r for r in results if r["category"] == cat]
+        by_category[cat] = {
+            "n":       len(rows),
+            "caught":  sum(1 for r in rows if r["outcome"] == "caught"),
+            "refused": sum(1 for r in rows if r["outcome"] == "model_refused"),
+            "pass":    sum(1 for r in rows if r["outcome"] == "legit_pass"),
+            "fp":      sum(1 for r in rows if r["outcome"] == "false_block"),
+        }
+
+    p50 = median(pe_latencies) if pe_latencies else 0
+    p95 = (quantiles(pe_latencies, n=20)[18] if len(pe_latencies) >= 20 else max(pe_latencies)) if pe_latencies else 0
+
+    out = {
+        "injection_total":    injection_total,
+        "injection_caught":   injection_caught,
+        "injection_refused":  injection_refused,
+        "containment_rate":   (injection_caught + injection_refused) / injection_total if injection_total else 0,
+        "catch_rate":         injection_caught / injection_total if injection_total else 0,
+        "false_positives":    fp_count,
+        "by_category":        by_category,
+        "latency_p50_ms":     p50,
+        "latency_p95_ms":     p95,
+    }
+    out_path = _Path(__file__).parent.parent / "results" / "policy_results.json"
+    with open(out_path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"Results saved → {out_path}")
+
 
 if __name__ == "__main__":
     run_eval()

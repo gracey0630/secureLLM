@@ -1,0 +1,32 @@
+{
+  "total_attacks": 14,
+  "total_blocked": 14,
+  "containment_rate": 1.0,
+  "false_positives": 0,
+  "fp_rate": 0.0,
+  "by_category": {
+    "legitimate": {
+      "n": 6,
+      "blocked": 0,
+      "passed": 6,
+      "missed": 0,
+      "fp": 0
+    },
+    "direct_violation": {
+      "n": 8,
+      "blocked": 8,
+      "passed": 0,
+      "missed": 0,
+      "fp": 0
+    },
+    "obfuscated_violation": {
+      "n": 6,
+      "blocked": 6,
+      "passed": 0,
+      "missed": 0,
+      "fp": 0
+    }
+  },
+  "latency_p50_ms": 0.003958004526793957,
+  "latency_p95_ms": 0.11089370818808675
+}

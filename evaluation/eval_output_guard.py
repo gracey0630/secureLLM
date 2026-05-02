@@ -446,6 +446,21 @@ def main():
 
     print("=" * 65)
 
+    # ── Save machine-readable results for compile_results.py ──────────────────
+    out = {}
+    if pii_stats:
+        out["pii"] = pii_stats
+    if secret_stats:
+        out["secrets"] = secret_stats
+    if manual_stats:
+        out["manual"] = manual_stats
+
+    out_path = here.parent / "results" / "output_guard_results.json"
+    import json
+    with open(out_path, "w") as f:
+        json.dump(out, f, indent=2)
+    print(f"\nResults saved → {out_path}")
+
 
 if __name__ == "__main__":
     main()
