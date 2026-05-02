@@ -107,12 +107,8 @@
   - At minimum one HackAPrompt level-5 attack trace end-to-end
 - *Deliverable: case study write-ups complete*
 
-**Person C** ⚠ IN PROGRESS — starting Streamlit demo
-- Begin building Streamlit demo interface
-- Core UI: text input → per-layer trace (green/red indicator per layer) → final output with redactions highlighted
-- Wire to live pipeline via FastAPI calls
-- *Deliverable: demo UI functional with real pipeline responses*
-- Libraries: `streamlit`, `requests` (API calls to FastAPI backend)
+**Person C** ✓ COMPLETE (May 2) — moved to Week 3 Second Half ahead of schedule
+- ✓ Streamlit demo built and committed — see Week 3 Second Half for full details
 
 ---
 
@@ -129,11 +125,16 @@
 - Write error analysis: categorize false negatives by HackAPrompt attack type taxonomy
 - *Deliverable: Methodology + Error Analysis drafted*
 
-**Person C**
-- Polish demo: add layer toggle controls so demo audience can enable/disable layers live
-- Add latency display per request
-- Deploy to Streamlit Cloud or HuggingFace Spaces
-- *Deliverable: demo publicly accessible via URL*
+**Person C** ✓ COMPLETE (May 2)
+- ✓ app.py: 3-column Streamlit UI — role selector, layer toggles, 5 attack scenario buttons, response display (pass/redact/block), per-layer trace with latency
+- ✓ orchestrator.py patched: denial_text surfaced for policy engine + sandbox blocks; response_text and redacted_text added to run_pipeline() return record
+- ✓ tools/file_read.py: fixed macOS /tmp symlink bug (Path.resolve() on DEMO_DIR)
+- ✓ data.csv: updated SSNs to realistic values (Presidio was rejecting sequential test SSNs)
+- ✓ Canary scenario reliability documented in report_notes.md (nondeterministic — paper framing added)
+- ✓ docs/modularization_plan.md: deferred plan for config-driven RBAC + pluggable tool registry
+- ⚠ Deployment: running locally for May 7 presentation. HuggingFace Spaces is the target if a public URL is needed for paper submission.
+- ⚠ Improvements deferred: role-dependent scenario outcomes, "reset layers" button, unsafe command reliability verification
+- *Deliverable: demo functional, committed to streamlit-demo branch*
 
 ---
 

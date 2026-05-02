@@ -245,11 +245,13 @@ def run_pipeline(
                     f"policy_engine: Claude retried tool call after denial "
                     f"(request_id={request_id}) — hard block applied"
                 )
+                policy_result["denial_text"] = "[Blocked: Claude retried tool call after denial]"
             else:
-                denial_text = next(
+                _denial_text = next(
                     (b.text for b in denial_response.content if b.type == "text"), ""
                 )
-                log.info(f"Claude denial acknowledgement: {denial_text[:80]!r}")
+                log.info(f"Claude denial acknowledgement: {_denial_text[:80]!r}")
+                policy_result["denial_text"] = _denial_text
 
             final_decision = "block"
 
@@ -276,6 +278,11 @@ def run_pipeline(
 
             if sb_triggered:
                 final_decision = "block"
+                if sb_result:
+                    sb_result["denial_text"] = (
+                        f"I'm sorry, but that command isn't permitted — "
+                        f"the tool sandbox blocked it ({sb_result.get('rule_violated', 'unsafe argument')})."
+                    )
 
             else:
                 # All tool calls permitted and args validated — execute each stub
@@ -327,6 +334,7 @@ def run_pipeline(
                 response_text, canary, config
             )
         latency_ms["output_guard"] = t_og.ms
+        og_result["redacted_text"] = response_text  # cleaned text for UI
         layer_results["output_guard"] = og_result
         layers_enabled["output_guard"] = True
 
@@ -338,7 +346,24 @@ def run_pipeline(
     # ── Total latency + log ────────────────────────────────────────────────────
     latency_ms["total"] = round(sum(latency_ms.values()), 3)
 
-    return log_request(
+    # Collect final response text for the demo UI.
+    # Not written to pipeline.jsonl (log_request schema unchanged).
+    _response_text = ""
+    if final_decision != "block":
+        og = layer_results.get("output_guard") or {}
+        if og.get("redacted"):
+            # output_guard threaded redacted text back; it was captured in og
+            pass  # UI reads from layer_results["output_guard"]["redacted_text"] if present
+        try:
+            _response_text = next(
+                (b.text for b in final_response.content if b.type == "text"), ""
+            )
+        except NameError:
+            _response_text = next(
+                (b.text for b in text_blocks), ""
+            ) if text_blocks else ""
+
+    record = log_request(
         input_text=user_message,
         layers_enabled=layers_enabled,
         layer_results=layer_results,
@@ -348,6 +373,8 @@ def run_pipeline(
         ground_truth_label=ground_truth_label,
         request_id=request_id,
     )
+    record["response_text"] = _response_text
+    return record
 
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
