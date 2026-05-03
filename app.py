@@ -20,6 +20,14 @@ from pipeline.orchestrator import run_pipeline
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
+@st.cache_resource
+def _warmup_output_guard():
+    from pipeline.output_guard import run_output_guard
+    run_output_guard("warmup", "[WARMUP]", {"output_guard": True})
+    return True
+
+_warmup_output_guard()
+
 st.set_page_config(
     page_title="SecureLLM Demo",
     page_icon="🔒",
