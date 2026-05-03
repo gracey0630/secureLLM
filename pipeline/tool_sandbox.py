@@ -7,22 +7,28 @@ form defense-in-depth: role check at the call boundary, content check at
 the execution boundary.
 
 Validates two tool types:
-  bash       — blocklist: destructive commands, pipe-to-shell, external
-               exfiltration, eval/backtick substitution
+  bash       — two-stage: regex blocklist then AST structural analysis
+               Stage 1 (regex): destructive commands, pipe-to-shell, external
+                 exfiltration, eval/backtick substitution
+               Stage 2 (AST):  redirect-based reverse shells, alternative
+                 network tools (ncat/scp/rsync), privilege ops (chmod +s,
+                 sudo, crontab), Python stdlib payloads (shutil/urllib/subprocess)
   file_read  — allowlist: path must be under /tmp/demo/
   file_write — allowlist: same path constraint
 
 All other tools (search, external_api) pass through without inspection.
 
-Attack taxonomy informed by Garak's malwaregen and encoding probe categories
-(rm -rf, privilege escalation, semicolon chaining, backtick injection).
-Garak itself cannot run against a Python validator — it probes LLM endpoints.
-The sandbox_corpus.py covers the same taxonomy manually.
+Stage 1 attack taxonomy informed by Garak's malwaregen and encoding probe
+categories. Stage 2 uses bashlex AST parsing (sandbox_ast.py) to catch
+structural attacks that raw string patterns miss — evaluated in
+evaluation/eval_garak_sandbox.py.
 """
 
 import re
 from pathlib import Path
 from typing import Any
+
+from pipeline.sandbox_ast import check_ast
 
 _ALLOWED_FILE_ROOT = Path("/tmp/demo")
 
@@ -106,6 +112,8 @@ def check_sandbox(
     if tool_name == "bash":
         command = tool_args.get("command", "")
         rule, blocked_arg = _check_bash(command)
+        if rule is None:
+            rule, blocked_arg = check_ast(command)
 
     elif tool_name in ("file_read", "file_write"):
         path = tool_args.get("path", "")
