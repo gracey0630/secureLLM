@@ -37,7 +37,7 @@ import tools.file_write as _file_write
 import tools.search as _search
 from logging_schema import Timer, log_request
 from pipeline.canary import generate_canary, inject_canary
-from pipeline.input_scanner import heuristic_scan
+from pipeline.input_scanner import invisible_scan, llmguard_scan
 from pipeline.output_guard import run_output_guard
 from pipeline.policy_engine import check_policy
 from pipeline.tool_sandbox import check_sandbox
@@ -160,15 +160,34 @@ def run_pipeline(
     system_prompt = inject_canary(_BASE_SYSTEM_PROMPT, canary)
 
     # ── Layer 1: Input Scanner ─────────────────────────────────────────────────
+    # Two LLM Guard scanners run in sequence:
+    #
+    #   1. InvisibleText — sub-millisecond Unicode control char check.
+    #      If triggered, block immediately (skip PromptInjection).
+    #      Covers zero-width chars, RTL override, soft hyphens — attack classes
+    #      not present in HackAPrompt but documented in bypass literature.
+    #
+    #   2. PromptInjection (DeBERTa) — semantic injection classifier.
+    #      Only runs if InvisibleText passes. This is the B2 operating point.
+    #
+    # Note: heuristic_scan() (B1 baseline) is intentionally excluded.
+    # Evaluated in eval_combined.py — adding it raises FPR +0.053 with zero
+    # TPR benefit, since PromptInjection already achieves TPR=1.0.
     if layers_enabled["input_scanner"]:
         with Timer() as t:
-            triggered, match_reason = heuristic_scan(user_message)
+            inv_triggered, _ = invisible_scan(user_message)
+            if inv_triggered:
+                triggered, lg_score, lg_scanner = True, 1.0, "invisible_text"
+            else:
+                lg_triggered, lg_score, _ = llmguard_scan(user_message)
+                triggered, lg_scanner = lg_triggered, "prompt_injection"
         latency_ms["input_scanner"] = t.ms
         layer_results["input_scanner"] = {
-            "triggered":    triggered,
-            "score":        None,
-            "method":       "heuristic",
-            "match_reason": match_reason,
+            "triggered":           triggered,
+            "score":               lg_score,
+            "method":              "llmguard",
+            "llmguard_scanner":    lg_scanner,
+            "invisible_triggered": inv_triggered,
         }
         if triggered:
             final_decision    = "block"

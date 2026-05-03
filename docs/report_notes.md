@@ -701,3 +701,83 @@ would complement the current pattern-based scanners by detecting paraphrased sys
 leakage and novel credential formats. We leave this for future work given the latency, cost,
 and ablation complexity it introduces. Perez & Ribeiro (2022) and Zheng et al. (2023) provide
 the methodological foundation for such an extension."
+
+---
+
+## Input Scanner — Pipeline uses LLM Guard only (decision May 3)
+
+**Decision:** `orchestrator.py` Layer 1 uses `llmguard_scan()` only. `heuristic_scan()`
+remains in `input_scanner.py` as the B1 baseline implementation but is not called in
+the pipeline path.
+
+**Why not the combined (B1+B2) design:**
+
+We evaluated a two-stage pipeline (heuristic → LLM Guard) in `eval_combined.py` and
+found it strictly worse on this corpus:
+
+| Variant | TPR | FPR | F1 | SecUtil |
+|---|---|---|---|---|
+| B1 heuristic only | 0.298 | 0.089 | 0.445 | 0.4057 |
+| B2 LLM Guard (t=0.92) | 1.000 | 0.045 | 0.990 | 0.9450 |
+| B1+B2 combined | 1.000 | 0.098 | 0.978 | 0.8815 |
+
+Three reasons the combined design was rejected:
+1. **Zero TPR benefit.** LLM Guard already has TPR=1.0 and catches every attack
+   heuristic catches. Stacking heuristic on top adds no detection capability.
+2. **FPR increases materially.** Combined FPR=0.098 vs B2 FPR=0.045 (+0.053).
+   Heuristic regex over-matches on legitimate inputs — phrases like "act as a
+   professional" or "from now on use bullet points" trigger pattern groups
+   (role_play_trigger, style_injection) that LLM Guard would correctly pass.
+   These false positives are a real user experience cost with no security benefit.
+3. **Latency savings are negligible.** The heuristic fast-rejects ~23% of inputs,
+   saving ~63ms LLM Guard inference per rejection. Average savings: ~14ms/request.
+   This is noise against the 3,622ms LLM call that dominates end-to-end latency.
+
+**Paper framing (ablation):** B1 (heuristic only) and the B1+B2 combined result from
+`eval_combined.py` are both worth reporting in the ablation table — they show that
+(a) cheap regex detection has a ceiling, and (b) naively stacking detectors can hurt
+precision without improving recall. The pipeline's input scanner operates at B2 level.
+
+**Caveats to document in Limitations:**
+- These results are specific to HackAPrompt as the attack corpus. The heuristic's
+  FPR problem on legitimate inputs may be smaller on a different legitimate corpus,
+  or larger if the deployment has more casual phrasing that triggers regex patterns.
+- The heuristic's interpretability advantage (named categories, zero latency, no model
+  dependency) is real in operational settings — for a research prototype optimizing
+  SecUtil, it is not worth the FPR cost.
+
+**Eval artifacts:**
+- `results/combined_scanner_results.json` — B1/B2/combined metrics
+- `evaluation/eval_combined.py` — reproduces the comparison (requires `logs/b2_scores.csv`)
+
+---
+
+## Input Scanner — InvisibleText scanner added (May 3)
+
+LLM Guard's `InvisibleText` scanner added to the pipeline as a pre-check before
+`PromptInjection`. Both are `llm_guard.input_scanners` components — this is an
+expansion of the LLM Guard configuration, not a new tool dependency.
+
+**What it covers:** zero-width space (U+200B), zero-width non-joiner (U+200C), zero-width
+joiner (U+200D), word joiner (U+2060), right-to-left override (U+202E), soft hyphen
+(U+00AD). These are used to split injection keywords to evade token-level classifiers.
+
+**What it does NOT cover:** Unicode homoglyph attacks (e.g. Cyrillic `а` substituted for
+Latin `a`). These require a separate confusable normalization pass and are documented as
+a Limitations item.
+
+**Eval result (LMSYS, n=731, May 3):**
+- FPR = 0/731 = 0.000 — no false positives on legitimate traffic
+- Latency p50=0.005ms, p95=0.102ms — effectively free (pure string scan, no model)
+
+**Execution order in orchestrator:** InvisibleText runs first. If triggered, block
+immediately and skip PromptInjection (saves ~63ms). If not triggered, PromptInjection
+runs as normal.
+
+**Paper framing:** "The pipeline's input scanner uses two LLM Guard components:
+`PromptInjection` for semantic injection detection and `InvisibleText` for Unicode
+control character bypass detection. InvisibleText adds coverage for bypass classes not
+represented in HackAPrompt, with FPR=0 on legitimate traffic (LMSYS, n=731) and
+sub-millisecond latency. No public benchmark corpus of invisible-character injection
+attacks exists; TPR is not reported for this component. Homoglyph attacks remain
+an open gap."

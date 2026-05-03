@@ -227,16 +227,24 @@ def heuristic_scan(text: str) -> tuple[bool, Optional[str]]:
     return False, None
 
 
-# ── LLM Guard wrapper ─────────────────────────────────────────────────────────
+# ── LLM Guard scanners ────────────────────────────────────────────────────────
 #
-# Lazy-loaded: the transformer model is only initialized on first call.
-# This avoids a multi-second startup cost on every import.
+# Both scanners are LLM Guard components (llm_guard.input_scanners).
+# Lazy-loaded to avoid startup cost on import.
+#
+# PromptInjection — DeBERTa classifier for semantic injection detection.
+#   B2 baseline (standalone) and the primary scanner in the pipeline.
+#
+# InvisibleText — Unicode control character detector, no model.
+#   Catches zero-width chars, RTL override, soft hyphens — bypass classes
+#   not present in HackAPrompt but documented in the literature.
+#   Does NOT catch homoglyph attacks (Cyrillic/Latin lookalikes).
 
-_llmguard_scanner = None
+_llmguard_scanner  = None
+_invisible_scanner = None
 
 
 def _get_llmguard_scanner():
-    """Initialize PromptInjection scanner once and cache it."""
     global _llmguard_scanner
     if _llmguard_scanner is not None:
         return _llmguard_scanner
@@ -257,6 +265,14 @@ def _get_llmguard_scanner():
         _llmguard_scanner = PromptInjection(threshold=0.0, use_onnx=True)
 
     return _llmguard_scanner
+
+
+def _get_invisible_scanner():
+    global _invisible_scanner
+    if _invisible_scanner is None:
+        from llm_guard.input_scanners import InvisibleText
+        _invisible_scanner = InvisibleText()
+    return _invisible_scanner
 
 
 def llmguard_scan(
@@ -286,25 +302,46 @@ def llmguard_scan(
     (triggered, score, sanitized_text)
         triggered      : True if score >= threshold
         score          : continuous confidence in [0, 1] — use this for sweep
-        sanitized_text : LLM Guard's sanitized version of the input (may be
-                         identical to input if no sanitization applied)
+        sanitized_text : LLM Guard's sanitized version of the input
 
-    Raises
-    ------
-    Does not raise. On any scanner failure returns (False, 0.0, text) and
-    logs a warning — failing open keeps eval runs from crashing mid-batch.
+    Does not raise. On failure returns (False, 0.0, text) and logs a warning.
     """
     try:
         scanner = _get_llmguard_scanner()
         sanitized_text, is_valid, score = scanner.scan(text)
         score = max(0.0, min(1.0, float(score)))  # clamp — LLM Guard can return negatives
         triggered = score >= threshold
-
         return triggered, score, sanitized_text
 
     except Exception as e:
         log.warning(f"llmguard_scan failed: {e} — returning safe default (not triggered)")
         return False, 0.0, text
+
+
+def invisible_scan(text: str) -> tuple[bool, str]:
+    """
+    Scan text using LLM Guard's InvisibleText scanner.
+
+    Detects zero-width characters (U+200B/C/D, U+2060), right-to-left
+    override (U+202E), soft hyphens (U+00AD), and other Unicode control
+    characters used to split or obfuscate injection payloads.
+
+    Binary decision — no threshold. Latency ~0.05ms (pure string scan,
+    no model). Does NOT catch homoglyph attacks (Cyrillic/Latin lookalikes).
+
+    Returns
+    -------
+    (triggered, sanitized_text)
+        triggered      : True if invisible characters were detected
+        sanitized_text : input with invisible characters stripped
+    """
+    try:
+        scanner = _get_invisible_scanner()
+        sanitized_text, is_valid, _ = scanner.scan(text)
+        return not is_valid, sanitized_text
+    except Exception as e:
+        log.warning(f"invisible_scan failed: {e} — returning safe default (not triggered)")
+        return False, text
 
 
 # ── Smoke test ─────────────────────────────────────────────────────────────────

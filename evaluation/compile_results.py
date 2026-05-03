@@ -121,6 +121,22 @@ def get_sandbox_summary() -> dict:
 
 # ── Output guard summary ───────────────────────────────────────────────────────
 
+def get_invisible_summary() -> dict:
+    path = RESULTS_DIR / "invisible_results.json"
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        return json.load(f)
+
+
+def get_combined_scanner_summary() -> dict:
+    path = RESULTS_DIR / "combined_scanner_results.json"
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        return json.load(f)
+
+
 def get_output_guard_summary() -> dict:
     """Loads eval_output_guard.py results if saved, otherwise prompts to run."""
     out_path = RESULTS_DIR / "output_guard_results.json"
@@ -134,24 +150,34 @@ def get_output_guard_summary() -> dict:
 
 # ── Print functions ────────────────────────────────────────────────────────────
 
-def print_input_scanner_table(sweep: dict) -> None:
+def print_input_scanner_table(sweep: dict, combined: dict, invisible: dict) -> None:
     print("\n  ┌─ Layer 1: Input Scanner (Threat: Direct Prompt Injection) ─────────────┐")
     b0  = sweep.get("b0", {})
     b1  = get_b1_reference()
     b2  = sweep.get("b2", {})
     pk  = sweep.get("b2_peak", {})
+    cb  = combined.get("combined", {})
 
-    print(f"  {'Config':<32} {'TPR':>6} {'FPR':>6} {'F1':>6} {'SecUtil':>8}")
-    print(f"  {'─'*60}")
+    print(f"  {'Config':<36} {'TPR':>6} {'FPR':>6} {'F1':>6} {'SecUtil':>8}")
+    print(f"  {'─'*64}")
     for label, d in [
         ("B0 — unprotected", b0),
-        ("B1 — heuristic scanner", b1),
+        ("B1 — heuristic only", b1),
         ("B2 — LLM Guard (t=0.50)", b2),
-        (f"LLM Guard peak (t={pk.get('threshold', '?'):.2f})", pk),
+        (f"B2 peak (t={pk.get('threshold', '?'):.2f})", pk),
+        ("B1+B2 combined (pipeline)", cb),
     ]:
         tpr = d.get("tpr", 0); fpr = d.get("fpr", 0)
         f1  = d.get("f1", 0);  su  = d.get("secutil", 0)
-        print(f"  {label:<32} {tpr:>6.3f} {fpr:>6.3f} {f1:>6.3f} {su:>8.4f}")
+        print(f"  {label:<36} {tpr:>6.3f} {fpr:>6.3f} {f1:>6.3f} {su:>8.4f}")
+    if not cb:
+        print(f"\n  [combined missing — run: python -m evaluation.eval_combined]")
+    if invisible:
+        inv_fpr = invisible.get("fpr", "?")
+        inv_n   = invisible.get("n", "?")
+        inv_p50 = invisible.get("latency_p50_ms", "?")
+        print(f"\n  InvisibleText (Unicode bypass): FPR={inv_fpr} on LMSYS n={inv_n}, latency p50={inv_p50}ms")
+        print(f"  TPR not reported — no public benchmark corpus for invisible-char attacks")
     if sweep.get("sweep_flat"):
         print(f"\n  Finding: {sweep['finding']}")
     print(f"  └{'─'*70}┘")
@@ -268,7 +294,7 @@ def print_output_guard_table(og: dict) -> None:
     print(f"  └{'─'*70}┘")
 
 
-def print_full_summary(sweep: dict, lat: dict, pol: dict, sb: dict, og: dict) -> None:
+def print_full_summary(sweep: dict, lat: dict, pol: dict, sb: dict, og: dict, combined: dict, invisible: dict) -> None:
     print("\n" + "═" * 74)
     print("  SecureLLM — Corporate Agentic Assistant — Paper Results Summary")
     print("═" * 74)
@@ -283,7 +309,7 @@ def print_full_summary(sweep: dict, lat: dict, pol: dict, sb: dict, og: dict) ->
     print("  PII / credential leakage  Output Guard    ai4privacy     79.5% recall")
     print("  Indirect injection        Canary loop     Synthetic      9/9 TP, 0 FP")
     print()
-    print_input_scanner_table(sweep)
+    print_input_scanner_table(sweep, combined, invisible)
     print_policy_table(pol)
     print_sandbox_table(sb)
     print_output_guard_table(og)
@@ -300,23 +326,27 @@ def main() -> None:
     parser.parse_args()  # keep for forward-compat; no flags needed now
 
     print("Loading results...")
-    sweep = load_threshold_sweep()
-    lat   = load_latency_stats()
-    log_s = load_pipeline_log_stats()
-    pol   = get_policy_summary()
-    sb    = get_sandbox_summary()
-    og    = get_output_guard_summary()
+    sweep    = load_threshold_sweep()
+    lat      = load_latency_stats()
+    log_s    = load_pipeline_log_stats()
+    pol      = get_policy_summary()
+    sb       = get_sandbox_summary()
+    og       = get_output_guard_summary()
+    combined  = get_combined_scanner_summary()
+    invisible = get_invisible_summary()
 
-    print_full_summary(sweep, lat, pol, sb, og)
+    print_full_summary(sweep, lat, pol, sb, og, combined, invisible)
 
     # Save machine-readable summary
     out = {
-        "input_scanner": sweep,
-        "policy_engine": pol,
-        "tool_sandbox":  sb,
-        "output_guard":  og,
-        "latency":       lat,
-        "pipeline_log":  log_s,
+        "input_scanner":          sweep,
+        "input_scanner_combined": combined,
+        "input_scanner_invisible": invisible,
+        "policy_engine":          pol,
+        "tool_sandbox":           sb,
+        "output_guard":           og,
+        "latency":                lat,
+        "pipeline_log":           log_s,
     }
     out_path = RESULTS_DIR / "paper_results.json"
     with open(out_path, "w") as f:

@@ -1,0 +1,10 @@
+{
+  "scanner": "InvisibleText (llm_guard)",
+  "corpus": "lmsys",
+  "n": 731,
+  "fp": 0,
+  "fpr": 0.0,
+  "fp_examples": [],
+  "latency_p50_ms": 0.005,
+  "latency_p95_ms": 0.102
+}
