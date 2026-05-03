@@ -4,47 +4,14 @@
     "presidio_recall": 0.755,
     "lg_recall": 0.21,
     "either_recall": 0.795,
-    "p50_ms": 118.46783349756151,
-    "p95_ms": 665.156795817893
-  },
-  "secrets": {
-    "n": 104,
-    "total_detected": 55,
-    "overall_recall": 0.5288461538461539,
-    "by_type": {
-      "api_key": {
-        "n": 26,
-        "detected": 2
-      },
-      "aws_creds": {
-        "n": 26,
-        "detected": 1
-      },
-      "ssn": {
-        "n": 26,
-        "detected": 26
-      },
-      "conn_str": {
-        "n": 26,
-        "detected": 26
-      }
-    },
-    "by_style": {
-      "plain": {
-        "n": 52,
-        "detected": 28
-      },
-      "embedded": {
-        "n": 52,
-        "detected": 27
-      }
-    }
+    "p50_ms": 84.17156245559454,
+    "p95_ms": 143.00540826516226
   },
   "manual": {
-    "tp": 9,
-    "tn": 9,
+    "tp": 13,
+    "tn": 10,
     "fp": 0,
-    "fn": 2,
-    "accuracy": 0.9
+    "fn": 1,
+    "accuracy": 0.9583333333333334
   }
 }

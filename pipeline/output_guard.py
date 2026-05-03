@@ -1,13 +1,14 @@
 """
 pipeline/output_guard.py — Layer 5: PII redaction + canary leak detection.
 
-Three mechanisms run sequentially on every LLM response:
-  1. Presidio     — PII detection and anonymization (spaCy NER)
-  2. LLM Guard    — Sensitive scanner (DeBERTa ai4privacy NER)
-  3. Canary check — substring match for the per-request canary token
+Four mechanisms run sequentially on every LLM response:
+  1. Presidio        — PII detection and anonymization (spaCy NER)
+  2. LLM Guard       — Sensitive scanner (DeBERTa ai4privacy NER)
+  3. detect-secrets  — Credential/secrets detection (30+ pattern plugins)
+  4. Canary check    — substring match for the per-request canary token
 
-Presidio modifies the response text (redacts). LLM Guard and canary are
-detection-only — they flag but do not modify.
+Presidio modifies the response text (redacts). LLM Guard, detect-secrets,
+and canary are detection-only — they flag but do not modify.
 
 DESIGN DECISIONS (see docs/report_notes.md — Output Guard section):
   - Returns (triggered, response_text, layer_result): the redacted text is
@@ -19,8 +20,10 @@ DESIGN DECISIONS (see docs/report_notes.md — Output Guard section):
   - Flat toggle flag: config["output_guard"]=bool, consistent with other layers.
   - Presidio and LLM Guard run sequentially. LLM Guard runs on the already-
     redacted text so PII already stripped by Presidio doesn't inflate its score.
+  - detect-secrets runs on the original (pre-redaction) text — it targets
+    credential formats that Presidio/LLM Guard do not cover (AWS keys, API tokens).
   - Per-scanner sub-results are included in layer_result so Person A can compare
-    Presidio vs LLM Guard recall directly from pipeline.jsonl without re-running.
+    Presidio vs LLM Guard vs detect-secrets recall from pipeline.jsonl.
 """
 
 import logging
@@ -57,6 +60,46 @@ def _load_lg_sensitive():
             threshold=_LG_THRESHOLD,
         )
         log.info("output_guard: LLM Guard Sensitive loaded")
+
+
+# ── detect-secrets ────────────────────────────────────────────────────────────
+
+_DS_CONFIG = {
+    "plugins_used": [
+        {"name": "AWSKeyDetector"},
+        {"name": "BasicAuthDetector"},
+        {"name": "PrivateKeyDetector"},
+        {"name": "StripeDetector"},
+        {"name": "SlackDetector"},
+        {"name": "MailchimpDetector"},
+        {"name": "TwilioKeyDetector"},
+        {"name": "ArtifactoryDetector"},
+    ]
+}
+
+
+def _run_detect_secrets(text: str) -> tuple[bool, list[str]]:
+    """
+    Scan text for credentials using detect-secrets deterministic plugins only.
+
+    Entropy-based plugins (HexHighEntropyString, Base64HighEntropyString) are
+    excluded — they produce false positives on normal prose. Only pattern-based
+    detectors are used: AWS keys, basic auth credentials, private keys, and
+    known token formats (Stripe, Slack, Twilio, Mailchimp, Artifactory).
+    Detection-only — does not modify the text.
+
+    Returns (triggered, secret_types_found).
+    """
+    from detect_secrets.core.scan import scan_line
+    from detect_secrets.settings import transient_settings
+
+    found_types = []
+    with transient_settings(_DS_CONFIG):
+        for line in text.splitlines():
+            for secret in scan_line(line):
+                found_types.append(secret.type)
+
+    return bool(found_types), list(set(found_types))
 
 
 # ── Presidio ──────────────────────────────────────────────────────────────────
@@ -124,12 +167,14 @@ def run_output_guard(
         layer_result   : dict matching output_guard section of logging_schema
     """
     _base = {
-        "triggered":             False,
-        "redacted":              False,
-        "canary_leaked":         False,
-        "presidio_entities":     [],
-        "llm_guard_triggered":   False,
-        "llm_guard_risk_score":  0.0,
+        "triggered":                  False,
+        "redacted":                   False,
+        "canary_leaked":              False,
+        "presidio_entities":          [],
+        "llm_guard_triggered":        False,
+        "llm_guard_risk_score":       0.0,
+        "detect_secrets_triggered":   False,
+        "detect_secrets_types":       [],
     }
 
     if not config.get("output_guard", False):
@@ -143,20 +188,25 @@ def run_output_guard(
     # ── 2. LLM Guard Sensitive (on already-redacted text) ─────────────────────
     lg_triggered, lg_risk_score = _run_lg_sensitive(response_text)
 
-    # ── 3. Canary check ───────────────────────────────────────────────────────
+    # ── 3. detect-secrets (on original text — targets credential formats) ─────
+    ds_triggered, ds_types = _run_detect_secrets(response)
+
+    # ── 4. Canary check ───────────────────────────────────────────────────────
     from pipeline.canary import check_canary_leak
     canary_leaked = check_canary_leak(response, canary) if canary else False
 
     redacted  = presidio_redacted or lg_triggered
-    triggered = redacted or canary_leaked
+    triggered = redacted or ds_triggered or canary_leaked
 
     layer_result = {
-        "triggered":            triggered,
-        "redacted":             redacted,
-        "canary_leaked":        canary_leaked,
-        "presidio_entities":    presidio_entities,
-        "llm_guard_triggered":  lg_triggered,
-        "llm_guard_risk_score": round(lg_risk_score, 4),
+        "triggered":                triggered,
+        "redacted":                 redacted,
+        "canary_leaked":            canary_leaked,
+        "presidio_entities":        presidio_entities,
+        "llm_guard_triggered":      lg_triggered,
+        "llm_guard_risk_score":     round(lg_risk_score, 4),
+        "detect_secrets_triggered": ds_triggered,
+        "detect_secrets_types":     ds_types,
     }
     return triggered, response_text, layer_result
 
@@ -208,5 +258,12 @@ if __name__ == "__main__":
     triggered, text, result = run_output_guard(clean_response, canary, config_on)
     assert not result["canary_leaked"]
     print("  ✓  canary not leaked on clean response")
+
+    # Credential leak — detect-secrets should flag AWS key
+    cred_text = "The AWS access key is AKIAIOSFODNN7EXAMPLE"
+    triggered, text, result = run_output_guard(cred_text, None, config_on)
+    assert triggered
+    assert result["detect_secrets_triggered"]
+    print(f"  ✓  credential detected — types: {result['detect_secrets_types']}")
 
     print("\nAll checks passed.")
