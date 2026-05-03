@@ -85,6 +85,58 @@ def run_eval() -> None:
         print(f"  → {outcome}")
 
     _print_table(results, pe_latencies)
+    _print_no_policy_baseline(results)
+
+
+def _print_no_policy_baseline(results: list) -> None:
+    """
+    Derive a no-policy baseline from already-collected records — zero extra API calls.
+
+    For every "caught" injection case, the policy engine intercepted a real tool call
+    that Claude emitted. Without the policy engine, that tool call would have executed.
+    This section quantifies the delta: what executes with vs. without enforcement.
+    """
+    injection_rows = [
+        r for r in results
+        if r["category"] in ("injection_explicit", "injection_implicit")
+    ]
+
+    # Caught = tool call emitted by Claude AND blocked by policy engine
+    caught_rows = [r for r in injection_rows if r["outcome"] == "caught"]
+
+    # For each caught case, pull the tool names that would have executed
+    would_execute: list[str] = []
+    for r in caught_rows:
+        pe = (r["record"].get("layer_results") or {}).get("policy_engine") or {}
+        would_execute.extend(pe.get("requested_tools", []))
+
+    from collections import Counter
+    tool_counts = Counter(would_execute)
+
+    print("\n" + "═" * 65)
+    print("  No-Policy Baseline — What Would Execute Without Enforcement")
+    print("  (derived from caught cases; no additional API calls)")
+    print("═" * 65)
+    print(f"  Injection cases where Claude emitted a tool call : {len(caught_rows)}")
+    print(f"  Tool calls that would have executed              : {len(would_execute)}")
+    if tool_counts:
+        print(f"  By tool type:")
+        for tool, count in tool_counts.most_common():
+            owasp = _OWASP_MAP.get(tool, "—")
+            print(f"    {tool:<14} ×{count}  ({owasp})")
+    print(f"\n  With policy engine   : 0 unauthorized tool calls execute")
+    print(f"  Without policy engine: {len(would_execute)} unauthorized tool calls execute")
+    print(f"  Delta                : {len(would_execute)} blocked  (policy engine contribution)")
+    print("\n" + "═" * 65)
+
+
+_OWASP_MAP = {
+    "file_read":    "OWASP LLM06 Sensitive Information Disclosure",
+    "file_write":   "OWASP LLM08 Excessive Agency",
+    "bash":         "OWASP LLM08 Excessive Agency",
+    "external_api": "OWASP LLM06 + LLM08",
+    "search":       "low risk",
+}
 
 
 def _print_table(results: list, pe_latencies: list) -> None:

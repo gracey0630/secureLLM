@@ -300,17 +300,72 @@ exactly — these are contract tests, not security tests.
 ### Metric — table over single number
 
 Containment Rate as a single number is underspecified (doesn't distinguish role violations
-from unknown tool denials, doesn't show usability impact). Report a breakdown table instead:
+from unknown tool denials, doesn't show usability impact). Report a breakdown table instead.
 
-| Category | N | Blocked | Passed |
-|---|---|---|---|
-| Guest → any tool (injection) | 3 | 3 | 0 |
-| User → elevated tool (injection) | 3 | 3 | 0 |
-| Legitimate user requests | 2 | 0 | 2 |
-| Legitimate admin requests | 2 | 0 | 2 |
+**Confirmed eval results (32 corpus cases, run May 3):**
 
-Plus latency: policy engine decision time should be <2ms (pure dict lookup). This is a
-legitimate paper datapoint — the enforcement overhead is negligible.
+| Category | N | Caught by PE | Model refused | Legit pass | FP |
+|---|---|---|---|---|---|
+| Legitimate requests | 6 | — | — | 6 | 0 |
+| Direct violation (no injection) | 4 | 4 | 0 | — | — |
+| Explicit injection (C) | 4 | 2 | 2 | — | — |
+| Implicit injection (D) | 18 | 16 | 2 | — | — |
+
+- Combined containment: 22/22 injection cases (100%) — 18 caught by PE, 4 refused by model
+- Policy engine catch rate: 18/22 (82%) — model_refused is double protection, not failure
+- False positive rate: 0/6 (0%)
+- Latency: p50=0.015ms, p95=0.045ms (dict lookup — negligible overhead)
+
+**Corpus design:** 32 cases total — 6 legitimate, 4 direct_violation, 4 injection_explicit,
+18 injection_implicit. Corpus informed by Perez & Ribeiro (2022), Greshake et al. (2023),
+and Liu et al. (2023) attack taxonomies. Explicit/implicit split reflects real-world
+distribution where semantic framing bypasses model-level refusals more reliably.
+
+**User→admin gap now covered:** D16–D18 added to cover `user` role attempting admin tools
+via injection (false authority claim, contextual continuation, semantic reward framing).
+2/3 caught by policy engine, 1 model_refused. Confirms the privilege gap is exploitable
+via injection even with a more conservative role.
+
+### No-policy baseline — quantified delta (May 3)
+
+Derived from caught records — zero extra API calls. For each "caught" injection case,
+the policy engine intercepted a real tool call Claude had emitted. Without enforcement,
+those calls would have executed:
+
+| | With policy engine | Without |
+|---|---|---|
+| Unauthorized tool calls executed | 0 | 20 |
+
+Tool breakdown of the 20 that would have executed:
+- bash ×14 (OWASP LLM08 Excessive Agency)
+- file_write ×3 (OWASP LLM08 Excessive Agency)
+- search ×2 (low risk — guest role; search is blocked for guest)
+- file_read ×1 (OWASP LLM06 Sensitive Information Disclosure)
+
+**Paper statement:** "Without the policy engine, 18 injection prompts caused Claude to
+emit 20 unauthorized tool calls. With enforcement at the execution layer, zero executed."
+
+**Note on search ×2:** Two "search" calls in the blocked count were emitted by guest-role
+sessions where search is also disallowed. This is correct — guest has no tool permissions.
+Not a false positive in the logging; search is genuinely unauthorized for guest.
+
+### Tool taxonomy — OWASP LLM Top 10 grounding (added May 3)
+
+Each tool type maps to a specific OWASP LLM Top 10 (2025) risk category. This gives the
+taxonomy a literature basis rather than looking ad hoc:
+
+| Tool | OWASP category |
+|---|---|
+| file_read | LLM06 Sensitive Information Disclosure |
+| file_write | LLM08 Excessive Agency |
+| bash | LLM08 Excessive Agency |
+| external_api | LLM06 + LLM08 (exfiltration + arbitrary action) |
+| search | Low risk (included as permitted baseline) |
+
+The policy engine's core contribution is LLM08 mitigation: restricting high-agency tools
+(bash, file_write, external_api) to admin role limits the blast radius of a successful
+injection. Tool Sandbox provides the second layer within the same OWASP category by
+validating arguments within permitted calls.
 
 ### Claude function-calling API format — implementation note
 

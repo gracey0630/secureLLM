@@ -20,6 +20,24 @@ Design decisions (see docs/report_notes.md — Policy Engine Design Decisions):
 # by the LLM that is not in this set is denied with reason="unknown_tool",
 # regardless of role. This set must stay in sync with the tool definitions
 # passed to the Claude API in pipeline/orchestrator.py.
+#
+# OWASP LLM Top 10 (2025) mapping — each tool maps to the risk category it can
+# enable when misused by an injected prompt:
+#
+#   file_read    → LLM06 Sensitive Information Disclosure
+#                  (reading credentials, private keys, config files)
+#   file_write   → LLM08 Excessive Agency
+#                  (writing backdoors, modifying config, planting payloads)
+#   bash         → LLM08 Excessive Agency
+#                  (arbitrary command execution, privilege escalation)
+#   external_api → LLM06 Sensitive Information Disclosure + LLM08 Excessive Agency
+#                  (data exfiltration to attacker-controlled endpoints)
+#   search       → low risk; included as a permitted baseline for all roles
+#
+# The policy engine's role taxonomy directly addresses LLM08: restricting which
+# roles may invoke high-agency tools limits the blast radius of a successful
+# injection. Argument-level validation (tool_sandbox.py) provides the second
+# layer within the same OWASP category.
 
 KNOWN_TOOLS: frozenset[str] = frozenset({
     "file_read",
