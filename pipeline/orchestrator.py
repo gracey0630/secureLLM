@@ -355,7 +355,7 @@ def run_pipeline(
         latency_ms["output_guard"] = t_og.ms
         og_result["redacted_text"] = response_text  # cleaned text for UI
         layer_results["output_guard"] = og_result
-        layers_enabled["output_guard"] = True
+        layers_enabled["output_guard"] = config.get("output_guard", False)
 
         if og_result["canary_leaked"]:
             final_decision = "block"

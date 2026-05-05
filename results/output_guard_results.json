@@ -4,8 +4,41 @@
     "presidio_recall": 0.755,
     "lg_recall": 0.21,
     "either_recall": 0.795,
-    "p50_ms": 84.17156245559454,
-    "p95_ms": 143.00540826516226
+    "p50_ms": 95.83777096122503,
+    "p95_ms": 244.8656526976265
+  },
+  "secrets": {
+    "n": 104,
+    "total_detected": 80,
+    "overall_recall": 0.7692307692307693,
+    "by_type": {
+      "api_key": {
+        "n": 26,
+        "detected": 2
+      },
+      "aws_creds": {
+        "n": 26,
+        "detected": 26
+      },
+      "ssn": {
+        "n": 26,
+        "detected": 26
+      },
+      "conn_str": {
+        "n": 26,
+        "detected": 26
+      }
+    },
+    "by_style": {
+      "plain": {
+        "n": 52,
+        "detected": 41
+      },
+      "embedded": {
+        "n": 52,
+        "detected": 39
+      }
+    }
   },
   "manual": {
     "tp": 13,
