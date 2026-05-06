@@ -150,7 +150,33 @@ Numbers are confirmed in `results/` — do not change without checking source fi
 
 ---
 
-## Slide 6 — Limitations + Practical Implications (45 sec)
+## Slide 6 — Live Demo Placeholder (3–4 min)
+
+### Slide content
+- Header: **Live Demo — SecureLLM in Action**
+- Centered text: *[Switch to browser — Streamlit app running at localhost:8501]*
+- Four bullet points (leave on screen during demo as a roadmap for the audience):
+  1. **Demo 1:** Privilege Escalation — implicit injection, Policy Engine intercept
+  2. **Demo 2:** PII Leakage — Output Guard redact (deterministic, safe fallback)
+  3. **Demo 3:** Toggle — Policy Engine off → bash executes; back on → blocked
+  4. **Demo 4 (time permitting):** Canary / Indirect Injection
+
+> **[NO ANIMATION OR BUILDS ON THIS SLIDE — it stays static while you demo]**
+> Keep this slide visible during the entire demo so the audience can follow along.
+> Font size for bullets should be large enough to read from the back of the room.
+
+### Setup checklist (do this before presenting, not during)
+- [ ] `streamlit run app.py` running and tested in Chrome
+- [ ] All layer toggles ON, role set to `user`
+- [ ] PII Leakage scenario preloaded as the fallback if canary doesn't fire
+- [ ] Layer trace panel visible (not collapsed)
+- [ ] `/tmp/demo/data.csv` exists with SSN/email/name data (run `python -m evaluation.setup_latency_fixtures` if missing)
+
+*Full demo script with exact steps is below under "Live Demo Script".*
+
+---
+
+## Slide 7 — Limitations + Practical Implications (45 sec)
 
 ### Slide content
 - Header: **Honest Gaps + What This Means for Deployment**
@@ -254,6 +280,35 @@ Numbers are confirmed in `results/` — do not change without checking source fi
 
 ---
 
+## Slide 8 — Thank You + References
+
+### Slide content
+- Header: **Thank You**
+- Team member names + course (STAT GR5293 GenAI, Columbia University)
+- **References** (small font, two-column list):
+
+```
+Perez & Ribeiro (2022). arXiv 2211.09527
+Greshake et al. (2023). arXiv 2302.12173
+Liu et al. (2023). arXiv 2306.05499
+Schulhoff et al. (2023). arXiv 2311.16119
+Rebedea et al. (2023). arXiv 2310.10501
+Wallace et al. (2024). arXiv 2402.00898
+Zhan et al. (2024). arXiv 2403.02691
+Zheng et al. (2023). arXiv 2306.05685
+Doran et al. (2024). garak (NVIDIA)
+OWASP LLM Top 10 (2025)
+```
+
+- Bottom of slide: **GitHub repo URL** + **`streamlit run app.py`**
+
+> **[This slide stays up during Q&A — references are visible if anyone asks for a citation]**
+
+### Script
+- "Happy to take questions."
+
+---
+
 ## Anticipated Q&A
 
 **"Why not just use LLM Guard?"**
@@ -282,7 +337,8 @@ Numbers are confirmed in `results/` — do not change without checking source fi
 | 3 | Architecture + Contributions | 1 min | 4.2 |
 | 4 | Results | 2 min | 4.3 Quantitative |
 | 5 | Case Studies | 1 min | 4.3 Qualitative |
-| 6 | Limitations + Implications | 45 sec | 4.3 Qualitative |
-| — | Demo | 3–4 min | Section 6 |
+| 6 | Live Demo (placeholder slide) | 3–4 min | Section 6 |
+| 7 | Limitations + Implications | 45 sec | 4.3 Qualitative |
+| 8 | Thank You + References | stays up during Q&A | — |
 | — | Q&A buffer | 1 min | — |
 | **Total** | | **~10–11 min** | |
