@@ -123,7 +123,7 @@ secureLLM/
 
 ```bash
 # 1. Clone and enter repo
-git clone <repo-url> && cd secureLLM
+git clone https://github.com/gracey0630/secureLLM && cd secureLLM
 
 # 2. Create virtual environment
 python3.11 -m venv .venv && source .venv/bin/activate
@@ -170,8 +170,10 @@ python -m evaluation.eval_combined
 # Policy engine
 python -m evaluation.eval_policy
 
-# Tool sandbox
+# Tool sandbox (unit, end-to-end, and garak adversarial probes)
 python -m evaluation.eval_tool_sandbox
+python -m evaluation.eval_tool_sandbox_e2e
+python -m evaluation.eval_garak_sandbox
 
 # Output guard
 python -m evaluation.eval_output_guard
