@@ -6,7 +6,7 @@ Imported by:
   pipeline/orchestrator.py   — Claude tool definitions must match KNOWN_TOOLS exactly
   tests/test_policy_engine.py
 
-Design decisions (see docs/report_notes.md — Policy Engine Design Decisions):
+Design decisions:
   - Allowlist over blocklist: anything not in KNOWN_TOOLS is denied unconditionally.
   - ROLE_ALLOWLIST and Claude's function-calling tool definitions are the same set
     by construction — both derived from KNOWN_TOOLS. They cannot drift out of sync.

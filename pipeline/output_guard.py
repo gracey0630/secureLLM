@@ -22,8 +22,8 @@ DESIGN DECISIONS (see docs/report_notes.md — Output Guard section):
     redacted text so PII already stripped by Presidio doesn't inflate its score.
   - detect-secrets runs on the original (pre-redaction) text — it targets
     credential formats that Presidio/LLM Guard do not cover (AWS keys, API tokens).
-  - Per-scanner sub-results are included in layer_result so Person A can compare
-    Presidio vs LLM Guard vs detect-secrets recall from pipeline.jsonl.
+  - Per-scanner sub-results are included in layer_result for cross-scanner
+    comparison of Presidio vs LLM Guard vs detect-secrets recall.
 """
 
 import logging

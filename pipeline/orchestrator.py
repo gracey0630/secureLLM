@@ -204,7 +204,7 @@ def run_pipeline(
                 run_id=run_id,
             )
 
-    # ── Layer 3: Claude LLM call ───────────────────────────────────────────────
+    # ── Claude LLM call ────────────────────────────────────────────────────────
     messages = [{"role": "user", "content": user_message}]
 
     with Timer() as t:
@@ -220,7 +220,7 @@ def run_pipeline(
     tool_calls  = [b for b in response.content if b.type == "tool_use"]
     text_blocks = [b for b in response.content if b.type == "text"]
 
-    # ── Layer 2: Policy Engine ─────────────────────────────────────────────────
+    # ── Policy Engine ──────────────────────────────────────────────────────────
     if tool_calls:
         tc_dicts = [
             {"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.input}
@@ -275,7 +275,7 @@ def run_pipeline(
             final_decision = "block"
 
         else:
-            # ── Layer 3: Tool Sandbox ──────────────────────────────────────
+            # ── Tool Sandbox ───────────────────────────────────────────────
             # Check argument safety for each permitted tool call before execution.
             # Block entire response if any call violates sandbox rules (same
             # policy as policy engine: no partial execution).
@@ -336,7 +336,7 @@ def run_pipeline(
                 latency_ms["llm"] += t3.ms
                 final_decision = "pass"
 
-    # ── Layer 5: Output Guard ──────────────────────────────────────────────────
+    # ── Output Guard ───────────────────────────────────────────────────────────
     # Collect the final response text from whichever path produced it.
     # text_blocks from the initial response covers no-tool-call paths;
     # final_response covers the tool-execution path.
@@ -369,10 +369,6 @@ def run_pipeline(
     # Not written to pipeline.jsonl (log_request schema unchanged).
     _response_text = ""
     if final_decision != "block":
-        og = layer_results.get("output_guard") or {}
-        if og.get("redacted"):
-            # output_guard threaded redacted text back; it was captured in og
-            pass  # UI reads from layer_results["output_guard"]["redacted_text"] if present
         try:
             _response_text = next(
                 (b.text for b in final_response.content if b.type == "text"), ""

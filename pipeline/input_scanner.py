@@ -24,8 +24,6 @@ API confirmed    : scan(prompt) → (sanitized_text, is_valid, score)
 Note             : model weights are ONNX-only on HuggingFace as of Apr 2026.
                    If PromptInjection() fails, retry with use_onnx=True.
 
-Week 2: both functions will be called inside a larger InputScanner class
-alongside canary injection. Signatures will not change.
 """
 
 import logging

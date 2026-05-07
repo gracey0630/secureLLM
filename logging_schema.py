@@ -4,15 +4,13 @@ logging_schema.py — Two-tier logging for the SecureLLM pipeline.
 Two functions, two purposes:
 
   log_request()   — PRIMARY eval logger. Writes one canonical JSON line per
-                    request to logs/pipeline.jsonl. Schema matches claude.md exactly
-                    so pd.read_json("pipeline.jsonl", lines=True) is eval-ready
-                    with no joins. Call this from the pipeline orchestrator (Week 2)
-                    once all layer results are collected.
+                    request to logs/pipeline.jsonl. Schema is eval-ready:
+                    pd.read_json("pipeline.jsonl", lines=True) needs no joins.
+                    Called from the orchestrator once all layer results are collected.
 
   log_event()     — DEBUG logger. Writes a lightweight per-layer line to
-                    logs/debug.jsonl. Call this from inside individual layers
-                    (input_scanner, output_guard, etc.) during isolated development
-                    before the full orchestrator exists.
+                    logs/debug.jsonl. Used for per-layer debugging outside the
+                    full pipeline.
 
 Timer           — Context manager for per-layer latency. Used by both callers.
 """

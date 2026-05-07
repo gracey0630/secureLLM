@@ -106,7 +106,7 @@ if "_message" not in st.session_state:
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 
-st.title("SecureLLM — 5-Layer Security Pipeline")
+st.title("SecureLLM — 4-Layer Security Pipeline")
 st.caption(
     "Protecting a corporate agentic LLM assistant with access to internal tools "
     "(file system, search, bash). The assistant uses a permissive system prompt by design — "
